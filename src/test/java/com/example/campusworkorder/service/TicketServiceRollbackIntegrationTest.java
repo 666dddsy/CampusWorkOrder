@@ -64,6 +64,10 @@ public class TicketServiceRollbackIntegrationTest {
 
             assertEquals(0L, ticketCount);
         }finally {
+            jdbcTemplate.update(
+                    "DELETE FROM ticket WHERE creator_id = ?",
+                    creatorId
+            );
             if(creatorId!=null) {
                 jdbcTemplate.update(
                         "delete from app_user where id=?",
