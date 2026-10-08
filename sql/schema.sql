@@ -5,6 +5,7 @@ use campus_work_order;
 
 select database();
 
+
 create table if not exists app_user(
     id bigint unsigned not null auto_increment,
     username varchar(50) not null,
@@ -66,3 +67,8 @@ create table if not exists ticket_log(
 );
 
 DESC ticket_log;
+
+SHOW CREATE TABLE ticket;
+
+select *from app_user;
+delete from app_user where password_hash='test_hash';

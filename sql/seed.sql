@@ -224,3 +224,4 @@ WHERE worker.role = 'WORKER'
 ORDER BY t.created_at ASC, t.id ASC;
 
 SHOW CREATE TABLE ticket
+
