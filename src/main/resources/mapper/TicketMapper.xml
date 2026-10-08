@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.campusworkorder.mapper.TicketMapper">
+
+    <insert id="insert"
+            parameterType="com.example.campusworkorder.entity.Ticket"
+            useGeneratedKeys="true"
+            keyProperty="id"
+            keyColumn="id">
+
+        INSERT INTO ticket
+        (
+        creator_id,
+        assignee_id,
+        title,
+        description,
+        location,
+        category,
+        priority,
+        status
+        )
+        VALUES
+        (
+        #{creatorId},
+        #{assigneeId},
+        #{title},
+        #{description},
+        #{location},
+        #{category},
+        #{priority},
+        #{status}
+        )
+
+    </insert>
+
+</mapper>

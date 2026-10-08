@@ -222,3 +222,5 @@ FROM ticket t
 WHERE worker.role = 'WORKER'
   AND t.status IN ('ASSIGNED', 'PROCESSING')
 ORDER BY t.created_at ASC, t.id ASC;
+
+SHOW CREATE TABLE ticket
