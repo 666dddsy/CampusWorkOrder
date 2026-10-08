@@ -1,4 +1,4 @@
-drop database if exists campus_work_order;
+
 
 create database if not exists campus_work_order;
 use campus_work_order;
@@ -37,7 +37,7 @@ create table if not exists ticket(
     foreign key (assignee_id) references app_user(id) on DELETE set null,
     check ( priority in('LOW','MEDIUM','HIGH','URGENT') ),
     CHECK (status IN ('CREATED','ASSIGNED','PROCESSING','RESOLVED','CLOSED')),
-    CHECK ( status IN('PLUMBING','ELECTRICAL' ,' NETWORK' , 'EQUIPMENT' , 'OTHER') ),
+    CHECK ( category IN('PLUMBING','ELECTRICAL','NETWORK','EQUIPMENT','OTHER') ),
 
     index idx_ticket_status_created_at(status,created_at),
     index idx_ticket_assignee_status(assignee_id,status),
