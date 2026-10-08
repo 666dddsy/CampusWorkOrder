@@ -56,8 +56,9 @@ public class TicketServiceRollbackIntegrationTest {
                     () -> ticketService.createTicket(finalCreatorId, request));
 
             Long ticketCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM ticket WHERE title = ?",
+                    "SELECT COUNT(*) FROM ticket WHERE creator_id = ? AND title = ?",
                     Long.class,
+                    creatorId,
                     request.getTitle()
             );
 
