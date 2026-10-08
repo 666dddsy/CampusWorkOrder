@@ -4,6 +4,23 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.example.campusworkorder.mapper.TicketMapper">
+    <select id="selectById"
+            parameterType="long"
+            resultType="com.example.campusworkorder.entity.Ticket">
+        SELECT id,
+        creator_id,
+        assignee_id,
+        title,
+        description,
+        location,
+        category,
+        priority,
+        status,
+        created_at,
+        updated_at
+        FROM ticket
+        WHERE id = #{id}
+    </select>
 
     <insert id="insert"
             parameterType="com.example.campusworkorder.entity.Ticket"
