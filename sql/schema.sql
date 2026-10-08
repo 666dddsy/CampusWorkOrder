@@ -1,3 +1,5 @@
+drop database if exists campus_work_order;
+
 create database if not exists campus_work_order;
 use campus_work_order;
 
@@ -12,7 +14,7 @@ create table if not exists app_user(
 
     primary key (id),
     constraint uk_app_user_username unique (username),
-    constraint chk_app_user_role check ( role in ('requester','worker','admin') )
+    constraint chk_app_user_role check ( role in ('REQUESTER','WORKER','ADMIN') )
 )engine=InnoDB;
 
 DESC app_user;
@@ -25,16 +27,17 @@ create table if not exists ticket(
     description text not null ,
     location varchar(100) not null ,
     category varchar(30) not null ,
-    priority varchar(30) not null default 'normal',
-    status varchar(20) not null default 'created',
+    priority varchar(30) not null default 'MEDIUM',
+    status varchar(20) not null default 'CREATED',
     created_at datetime not null default current_timestamp ,
     updated_at datetime not null default current_timestamp on update current_timestamp,
 
     primary key (id),
     foreign key (creator_id) references app_user(id) on delete restrict ,
     foreign key (assignee_id) references app_user(id) on DELETE set null,
-    check ( priority in('low','normal','high','urgent') ),
-    CHECK (status IN ('created','assigned','processing','resolved','closed')),
+    check ( priority in('LOW','MEDIUM','HIGH','URGENT') ),
+    CHECK (status IN ('CREATED','ASSIGNED','PROCESSING','RESOLVED','CLOSED')),
+    CHECK ( status IN('PLUMBING','ELECTRICAL' ,' NETWORK' , 'EQUIPMENT' , 'OTHER') ),
 
     index idx_ticket_status_created_at(status,created_at),
     index idx_ticket_assignee_status(assignee_id,status),
@@ -55,6 +58,9 @@ create table if not exists ticket_log(
     primary key (id),
     foreign key (ticket_id) references ticket(id),
     foreign key (operator_id) references app_user(id),
+
+    check ( from_status in('CREATED','ASSIGNED','PROCESSING','RESOLVED','CLOSED') ),
+    check ( to_status in('CREATED','ASSIGNED','PROCESSING','RESOLVED','CLOSED') ),
 
     index idx_ticket_log_ticket_time(ticket_id,created_at)
 );

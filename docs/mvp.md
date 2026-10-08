@@ -99,8 +99,8 @@
 - title：不能为空，长度不超过 100。
 - description：不能为空，长度不超过 1000。
 - location：不能为空，长度不超过 100。
-- category：只能是预先规定的分类。
-- priority：只能是 LOW、MEDIUM、HIGH。
+- category：只能是预先规定的分类,明确为 PLUMBING/ ELECTRICAL / NETWORK / EQUIPMENT / OTHER
+- priority：只能是 LOW、MEDIUM、HIGH、URGENT。
 - 客户端不能指定 status、assigneeId、createdAt。
 
 ## 成功响应
