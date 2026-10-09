@@ -33,6 +33,10 @@ public class TicketService {
         return ticket.getId();
     }
 
+    public Ticket selectById(Long ticketId){
+        return ticketMapper.selectById(ticketId);
+    }
+
     private Ticket toTicket(Long creatorId,TicketCreateRequest ticketCreateRequest){
         Ticket ticket=new Ticket();
         ticket.setCreatorId(creatorId);
@@ -55,4 +59,6 @@ public class TicketService {
         ticketLog.setNote("报修人创建工单");
         return ticketLog;
     }
+
+
 }

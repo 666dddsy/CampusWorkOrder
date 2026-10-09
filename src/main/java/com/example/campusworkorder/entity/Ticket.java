@@ -5,6 +5,7 @@ import com.example.campusworkorder.domain.enums.TicketPriority;
 import com.example.campusworkorder.domain.enums.TicketStatus;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 public class Ticket {
 
@@ -107,4 +108,5 @@ public class Ticket {
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
+
 }
