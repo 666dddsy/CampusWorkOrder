@@ -34,9 +34,10 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 | `WORKER` | 查看分配给自己的工单、开始处理、标记已解决 |
 | `ADMIN` | 查看全部工单、分配维修人员 |
 
-第一版暂不实现登录、JWT 和真正的权限认证。
+第一版暂不实现登录、JWT 和真正的权限认证。创建工单接口暂时通过请求头
+`X-User-Id` 接收报修人 ID；该请求头只是开发阶段的身份占位方案，不等同于真实认证。
 
-## 计划技术栈
+## 技术栈
 
 - Java 21
 - Spring Boot
@@ -48,25 +49,6 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 - JUnit 5
 - Mockito
 - MockMvc
-
-## 项目结构
-
-```text
-CampusWorkOrder
-├─ docs
-│  └─ mvp.md          项目范围和业务规则
-├─ sql
-│  ├─ schema.sql      数据库及数据表结构
-│  └─ seed.sql        演示数据和查询示例
-├─ src
-│  ├─ main
-│  │  ├─ java         Java 源代码
-│  │  └─ resources    配置文件和 Mapper XML
-│  └─ test
-│     └─ java         自动化测试
-├─ pom.xml
-└─ README.md
-```
 
 ## 数据库设计
 
@@ -120,27 +102,68 @@ export DB_PASSWORD="你的数据库密码"
 
 ## 启动与测试
 
-当前项目正在搭建 Spring Boot 骨架，暂时不能完整启动。
-
-Spring Boot 骨架完成后，计划使用以下命令运行测试：
+确认 MySQL 已启动，并在当前终端设置好 `DB_USER`、`DB_PASSWORD` 后，在项目根目录运行：
 
 ```bash
 mvn test
 ```
 
-启动应用：
+测试通过后启动应用：
 
 ```bash
 mvn spring-boot:run
 ```
 
-应用默认访问地址计划为：
+应用默认访问地址为：
 
 ```text
 http://localhost:8080
 ```
 
-以上命令需要在实际运行通过后再次确认和更新。
+如果命令行测试提示无法复制 `target/classes/application.yml`，通常是已有应用进程正在占用
+`target` 目录。先停止正在运行的应用，再重新执行测试。
+
+## 已实现接口
+
+### 创建工单
+
+```http
+POST /tickets
+X-User-Id: 1
+Content-Type: application/json
+```
+
+请求体示例：
+
+```json
+{
+  "title": "宿舍水管漏水",
+  "description": "洗手池下方持续漏水",
+  "location": "滨江宿舍3栋412",
+  "category": "PLUMBING",
+  "priority": "MEDIUM"
+}
+```
+
+创建成功返回 `201 Created` 和完整工单信息。参数校验失败返回 `400 Bad Request`，
+响应体按字段给出错误信息。
+
+PowerShell 调试示例：
+
+```powershell
+curl.exe -i -X POST "http://localhost:8080/tickets" `
+  -H "Content-Type: application/json" `
+  -H "X-User-Id: 1" `
+  -d '{"title":"宿舍水管漏水","description":"洗手池下方持续漏水","location":"滨江宿舍3栋412","category":"PLUMBING","priority":"MEDIUM"}'
+```
+
+### 按 ID 查询工单
+
+```http
+GET /tickets/{id}
+```
+
+工单存在时返回 `200 OK` 和完整工单信息；工单不存在时返回 `404 Not Found`。
 
 ## 当前进度
 
@@ -148,13 +171,17 @@ http://localhost:8080
 - [x] 设计用户角色和工单状态流
 - [x] 设计数据库表结构
 - [x] 编写演示数据和查询 SQL
-- [ ] 修正并重新验证数据库脚本
-- [ ] 搭建 Spring Boot 工程
-- [ ] 实现创建工单
-- [ ] 实现工单详情查询
+- [x] 修正并重新验证数据库脚本
+- [x] 搭建 Spring Boot 工程
+- [x] 实现创建工单
+- [x] 实现工单详情查询
+- [x] 完成创建工单参数校验和字段级异常响应
+- [x] 完成创建工单 Controller 测试
+- [x] 完成创建事务及回滚集成测试
+- [x] 通过真实 HTTP 请求验证创建工单
 - [ ] 实现工单分配和状态流转
-- [ ] 完成参数校验和异常处理
-- [ ] 完成自动化测试
+- [ ] 补充工单详情查询 Controller 测试
+- [ ] 继续补充后续接口的参数校验、异常处理和自动化测试
 - [ ] 完成项目部署
 
 ## 第一版暂不实现

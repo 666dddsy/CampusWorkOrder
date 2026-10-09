@@ -68,8 +68,4 @@ create table if not exists ticket_log(
 
 DESC ticket_log;
 
-SHOW CREATE TABLE ticket;
 
-select *from app_user;
-select *from ticket;
-delete from app_user where password_hash='test_hash';
