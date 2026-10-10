@@ -189,9 +189,11 @@ public class TicketControllerTest {
         mockMvc.perform(get("/tickets/mine")
                 .header("X-User-Id","12"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].creatorId").value(12))
                 .andExpect(jsonPath("$[0].id").value(101))
-                .andExpect(jsonPath("$[1].creatorId").value(12));
+                .andExpect(jsonPath("$[1].creatorId").value(12))
+                .andExpect(jsonPath("$[1].id").value(102));
         verify(ticketService).selectByCreatorId(12L);
     }
     @Test
