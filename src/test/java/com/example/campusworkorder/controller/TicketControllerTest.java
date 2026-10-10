@@ -48,6 +48,21 @@ public class TicketControllerTest {
         ticket.setUpdatedAt(LocalDateTime.of(2026, 10, 9, 10, 30));
         return ticket;
     }
+    private Ticket exampleTicket2() {
+        Ticket ticket = new Ticket();
+        ticket.setId(99L);
+        ticket.setCreatorId(12L);
+        ticket.setAssigneeId(null);
+        ticket.setTitle("漏水");
+        ticket.setDescription("厕所持续漏水");
+        ticket.setLocation("滨江宿舍3栋412");
+        ticket.setCategory(TicketCategory.PLUMBING);
+        ticket.setPriority(TicketPriority.MEDIUM);
+        ticket.setStatus(TicketStatus.CREATED);
+        ticket.setCreatedAt(LocalDateTime.of(2025, 10, 9, 10, 30));
+        ticket.setUpdatedAt(LocalDateTime.of(2025, 10, 9, 10, 30));
+        return ticket;
+    }
 
     @Test
     void createTicket_withRightInformation_shouldReturn201()throws Exception{
@@ -165,13 +180,18 @@ public class TicketControllerTest {
     @Test
     void selectMine_withNotNull_shouldReturn200()throws Exception{
         Ticket ticket=exampleTicket();
+        Ticket ticket2=exampleTicket2();
         List<Ticket> tickets=new ArrayList<>();
         tickets.add(ticket);
+        tickets.add(ticket2);
         when(ticketService.selectByCreatorId(12L))
                 .thenReturn(tickets);
         mockMvc.perform(get("/tickets/mine")
                 .header("X-User-Id","12"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].creatorId").value(12))
+                .andExpect(jsonPath("$[0].id").value(101))
+                .andExpect(jsonPath("$[1].creatorId").value(12));
         verify(ticketService).selectByCreatorId(12L);
     }
     @Test
