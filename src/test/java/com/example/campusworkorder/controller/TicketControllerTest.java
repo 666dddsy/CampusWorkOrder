@@ -15,11 +15,14 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -133,5 +136,53 @@ public class TicketControllerTest {
                                 """))
                 .andExpect(status().isBadRequest()) ;
     verifyNoInteractions(ticketService);
+    }
+    @Test
+    void selectById_withNotNull_shouldReturn200()throws Exception{
+        Ticket ticket=exampleTicket();
+        when(ticketService.selectById(101L))
+                .thenReturn(ticket);
+        mockMvc.perform(get("/tickets/101"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(101))
+                .andExpect(jsonPath("$.creatorId").value(12))
+                .andExpect(jsonPath("$.assigneeId").value(nullValue()))
+                .andExpect(jsonPath("$.title").value("宿舍水管漏水"))
+                .andExpect(jsonPath("$.category").value("PLUMBING"))
+                .andExpect(jsonPath("$.priority").value("MEDIUM"))
+                .andExpect(jsonPath("$.status").value("CREATED"))
+                .andExpect(jsonPath("$.createdAt").exists());
+        verify(ticketService).selectById(101L);
+    }
+    @Test
+    void selectById_withNull_shouldReturn404()throws Exception{
+        when(ticketService.selectById(any(Long.class)))
+                .thenReturn(null);
+        mockMvc.perform(get("/tickets/1"))
+                .andExpect(status().isNotFound());
+        verify(ticketService).selectById(1L);
+    }
+    @Test
+    void selectMine_withNotNull_shouldReturn200()throws Exception{
+        Ticket ticket=exampleTicket();
+        List<Ticket> tickets=new ArrayList<>();
+        tickets.add(ticket);
+        when(ticketService.selectByCreatorId(12L))
+                .thenReturn(tickets);
+        mockMvc.perform(get("/tickets/mine")
+                .header("X-User-Id","12"))
+                .andExpect(status().isOk());
+        verify(ticketService).selectByCreatorId(12L);
+    }
+    @Test
+    void selectMine_withEmptyList_shouldReturnEmptyArrayList()throws Exception{
+        List<Ticket> tickets=new ArrayList<>();
+        when(ticketService.selectByCreatorId(any(Long.class)))
+                .thenReturn(tickets);
+        mockMvc.perform(get("/tickets/mine")
+                        .header("X-User-Id","12"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+        verify(ticketService).selectByCreatorId(12L);
     }
 }

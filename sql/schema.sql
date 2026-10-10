@@ -68,4 +68,3 @@ create table if not exists ticket_log(
 
 DESC ticket_log;
 
-

@@ -9,6 +9,8 @@ import com.example.campusworkorder.mapper.TicketMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 
 @Service
 public class TicketService {
@@ -35,6 +37,9 @@ public class TicketService {
 
     public Ticket selectById(Long ticketId){
         return ticketMapper.selectById(ticketId);
+    }
+    public List<Ticket> selectByCreatorId(Long creatorId){
+        return ticketMapper.selectByCreatorId(creatorId);
     }
 
     private Ticket toTicket(Long creatorId,TicketCreateRequest ticketCreateRequest){

@@ -9,6 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @RestController
 @RequestMapping("/tickets")
 public class TicketController {
@@ -29,6 +32,16 @@ public class TicketController {
             TicketResponse ticketResponse = toTicketResponse(ticket);
             return ResponseEntity.ok(ticketResponse);
         }
+    }
+    @GetMapping("/mine")
+    public ResponseEntity<List<TicketResponse>> selectMyTickets(@RequestHeader("X-User-Id") Long creatorId){
+        List<Ticket> tickets=ticketService.selectByCreatorId(creatorId);
+        List<TicketResponse> ticketResponse=new ArrayList<>();
+        for(Ticket ticket:tickets)
+        {
+            ticketResponse.add(toTicketResponse(ticket));
+        }
+        return ResponseEntity.ok(ticketResponse);
     }
     @PostMapping
     public ResponseEntity<TicketResponse> createTicket(
