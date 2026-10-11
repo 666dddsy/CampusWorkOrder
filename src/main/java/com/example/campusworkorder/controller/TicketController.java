@@ -1,5 +1,6 @@
 package com.example.campusworkorder.controller;
 
+import com.example.campusworkorder.dto.TicketAssignRequest;
 import com.example.campusworkorder.dto.TicketCreateRequest;
 import com.example.campusworkorder.dto.TicketResponse;
 import com.example.campusworkorder.entity.Ticket;
@@ -53,7 +54,19 @@ public class TicketController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ticketResponse);
     }
-
+    @PatchMapping("/{id}/assignment")
+    public ResponseEntity<TicketResponse> assignTicket(
+            @Valid@RequestBody TicketAssignRequest ticketAssignRequest,
+            @RequestHeader("X-User-Id") Long operatorId,
+            @PathVariable Long id
+            ){
+        Ticket ticket=ticketService.assignTicket(id,operatorId,ticketAssignRequest);
+        if(ticket==null)
+            return ResponseEntity.notFound()
+                    .build();
+        TicketResponse ticketResponse=toTicketResponse(ticket);
+        return ResponseEntity.ok(ticketResponse);
+    }
     private TicketResponse toTicketResponse(Ticket ticket){
         TicketResponse ticketResponse=new TicketResponse();
         ticketResponse.setAssigneeId(ticket.getAssigneeId());

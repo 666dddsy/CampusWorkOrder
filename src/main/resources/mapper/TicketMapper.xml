@@ -72,4 +72,10 @@
 
     </insert>
 
+    <update id="updateAssignmentIfCreated">
+        update ticket set status='ASSIGNED',
+        assignee_id=#{assigneeId}
+        where id=#{ticketId} and status='CREATED'
+    </update>
+
 </mapper>

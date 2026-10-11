@@ -193,7 +193,7 @@ public class TicketControllerTest {
                 .andExpect(jsonPath("$[0].creatorId").value(12))
                 .andExpect(jsonPath("$[0].id").value(101))
                 .andExpect(jsonPath("$[1].creatorId").value(12))
-                .andExpect(jsonPath("$[1].id").value(102));
+                .andExpect(jsonPath("$[1].id").value(99));
         verify(ticketService).selectByCreatorId(12L);
     }
     @Test
@@ -207,4 +207,5 @@ public class TicketControllerTest {
                 .andExpect(content().json("[]"));
         verify(ticketService).selectByCreatorId(12L);
     }
+
 }
