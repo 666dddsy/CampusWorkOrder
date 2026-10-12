@@ -41,6 +41,25 @@
         order by created_at DESC, id DESC
     </select>
 
+    <select id="selectByAssigneeId"
+            parameterType="long"
+            resultType="com.example.campusworkorder.entity.Ticket">
+        SELECT id,
+        creator_id,
+        assignee_id,
+        title,
+        description,
+        location,
+        category,
+        priority,
+        status,
+        created_at,
+        updated_at
+        FROM ticket
+        WHERE assignee_id = #{assigneeId}
+        order by created_at DESC, id DESC
+    </select>
+
     <insert id="insert"
             parameterType="com.example.campusworkorder.entity.Ticket"
             useGeneratedKeys="true"

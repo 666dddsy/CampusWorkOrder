@@ -75,8 +75,22 @@ public class TicketService {
     public Ticket selectById(Long ticketId){
         return ticketMapper.selectById(ticketId);
     }
+
     public List<Ticket> selectByCreatorId(Long creatorId){
         return ticketMapper.selectByCreatorId(creatorId);
+    }
+
+    public List<Ticket> selectMyAssignedTickets(Long currentUserId) {
+        UserRole role = appUserMapper.selectRoleById(currentUserId);
+
+        if (role != UserRole.WORKER) {
+            throw new BusinessException(
+                    HttpStatus.FORBIDDEN,
+                    "UserRole should be 'WORKER'"
+            );
+        }
+
+        return ticketMapper.selectByAssigneeId(currentUserId);
     }
 
     private Ticket toTicket(Long creatorId,TicketCreateRequest ticketCreateRequest){
@@ -101,6 +115,7 @@ public class TicketService {
         ticketLog.setNote("报修人创建工单");
         return ticketLog;
     }
+
     private TicketLog toTicketLogAssigned(Long operatorId,Ticket ticket){
         TicketLog ticketLog=new TicketLog();
         ticketLog.setTicketId(ticket.getId());

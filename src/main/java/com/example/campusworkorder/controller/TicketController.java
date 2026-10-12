@@ -34,6 +34,17 @@ public class TicketController {
             return ResponseEntity.ok(ticketResponse);
         }
     }
+    @GetMapping("/assigned-to-me")
+    public ResponseEntity<List<TicketResponse>> selectMyAssignedTickets(@RequestHeader("X-User-Id") Long currentUserId){
+
+        List<Ticket> tickets=ticketService.selectMyAssignedTickets(currentUserId);
+        List<TicketResponse> ticketResponse=new ArrayList<>();
+        for(Ticket ticket:tickets)
+        {
+            ticketResponse.add(toTicketResponse(ticket));
+        }
+        return ResponseEntity.ok(ticketResponse);
+    }
     @GetMapping("/mine")
     public ResponseEntity<List<TicketResponse>> selectMyTickets(@RequestHeader("X-User-Id") Long creatorId){
         List<Ticket> tickets=ticketService.selectByCreatorId(creatorId);
@@ -56,7 +67,7 @@ public class TicketController {
     }
     @PatchMapping("/{id}/assignment")
     public ResponseEntity<TicketResponse> assignTicket(
-            @Valid@RequestBody TicketAssignRequest ticketAssignRequest,
+            @Valid @RequestBody TicketAssignRequest ticketAssignRequest,
             @RequestHeader("X-User-Id") Long operatorId,
             @PathVariable Long id
             ){

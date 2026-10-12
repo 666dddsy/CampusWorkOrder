@@ -12,6 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -393,5 +396,178 @@ public class TicketServiceIntegrationTest {
             }
         }
     }
+    @Test
+    void selectMyAssignedTicketsShouldOnlyReturnCurrentWorkersTickets() {
+        String suffix = String.valueOf(System.nanoTime());
 
+        String requesterUsername = "list_requester_" + suffix;
+        String workerAUsername = "list_worker_a_" + suffix;
+        String workerBUsername = "list_worker_b_" + suffix;
+
+        String aOldTitle = "a_old_" + suffix;
+        String aNewTitle = "a_new_" + suffix;
+        String bTitle = "b_ticket_" + suffix;
+
+        try {
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO app_user (username, password_hash, role)
+                    VALUES
+                        (?, ?, ?),
+                        (?, ?, ?),
+                        (?, ?, ?)
+                    """,
+                    requesterUsername, "test_hash", "REQUESTER",
+                    workerAUsername, "test_hash", "WORKER",
+                    workerBUsername, "test_hash", "WORKER"
+            );
+
+            Long requesterId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM app_user WHERE username = ?",
+                    Long.class,
+                    requesterUsername
+            );
+
+            Long workerAId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM app_user WHERE username = ?",
+                    Long.class,
+                    workerAUsername
+            );
+
+            Long workerBId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM app_user WHERE username = ?",
+                    Long.class,
+                    workerBUsername
+            );
+
+            // 2. 准备明确的创建时间，避免依赖插入速度
+            LocalDateTime baseTime =
+                    LocalDateTime.of(2026, 10, 12, 10, 0);
+
+            // 3. 创建三张工单：A 两张、B 一张
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO ticket
+                    (
+                        creator_id,
+                        assignee_id,
+                        title,
+                        description,
+                        location,
+                        category,
+                        priority,
+                        status,
+                        created_at
+                    )
+                    VALUES
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?),
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?),
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+
+                    // A 的旧工单
+                    requesterId,
+                    workerAId,
+                    aOldTitle,
+                    "worker A 旧工单",
+                    "测试地点",
+                    "NETWORK",
+                    "MEDIUM",
+                    "ASSIGNED",
+                    Timestamp.valueOf(baseTime),
+
+                    // A 的新工单
+                    requesterId,
+                    workerAId,
+                    aNewTitle,
+                    "worker A 新工单",
+                    "测试地点",
+                    "NETWORK",
+                    "MEDIUM",
+                    "ASSIGNED",
+                    Timestamp.valueOf(baseTime.plusHours(1)),
+
+                    // B 的工单故意设置为最新
+                    requesterId,
+                    workerBId,
+                    bTitle,
+                    "worker B 工单",
+                    "测试地点",
+                    "NETWORK",
+                    "MEDIUM",
+                    "ASSIGNED",
+                    Timestamp.valueOf(baseTime.plusHours(2))
+            );
+
+            Long aOldTicketId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM ticket WHERE title = ?",
+                    Long.class,
+                    aOldTitle
+            );
+
+            Long aNewTicketId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM ticket WHERE title = ?",
+                    Long.class,
+                    aNewTitle
+            );
+
+            Long workerBTicketId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM ticket WHERE title = ?",
+                    Long.class,
+                    bTitle
+            );
+
+
+            List<Ticket> result =
+                    ticketService.selectMyAssignedTickets(workerAId);
+
+
+            assertEquals(2, result.size());
+
+            assertEquals(workerAId, result.get(0).getAssigneeId());
+            assertEquals(workerAId, result.get(1).getAssigneeId());
+
+
+            assertEquals(aNewTicketId, result.get(0).getId());
+            assertEquals(aOldTicketId, result.get(1).getId());
+
+
+            assertNotEquals(workerBTicketId, result.get(0).getId());
+            assertNotEquals(workerBTicketId, result.get(1).getId());
+
+        } finally {
+            // 先删除可能存在的日志
+            jdbcTemplate.update(
+                    """
+                    DELETE FROM ticket_log
+                    WHERE ticket_id IN
+                    (
+                        SELECT id
+                        FROM ticket
+                        WHERE title IN (?, ?, ?)
+                    )
+                    """,
+                    aOldTitle,
+                    aNewTitle,
+                    bTitle
+            );
+
+            // 再删除本轮创建的三张工单
+            jdbcTemplate.update(
+                    "DELETE FROM ticket WHERE title IN (?, ?, ?)",
+                    aOldTitle,
+                    aNewTitle,
+                    bTitle
+            );
+
+            // 最后删除本轮创建的三个用户
+            jdbcTemplate.update(
+                    "DELETE FROM app_user WHERE username IN (?, ?, ?)",
+                    requesterUsername,
+                    workerAUsername,
+                    workerBUsername
+            );
+        }
+    }
 }

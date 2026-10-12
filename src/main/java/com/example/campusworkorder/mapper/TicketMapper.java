@@ -12,5 +12,6 @@ public interface TicketMapper {
     int insert(Ticket ticket);
     Ticket selectById(@Param("id") Long id);
     List<Ticket> selectByCreatorId(@Param("creatorId") Long creatorId);
+    List<Ticket> selectByAssigneeId(@Param("assigneeId") Long assigneeId);
     int updateAssignmentIfCreated(@Param("ticketId") Long ticketId,@Param("assigneeId")Long assigneeId);
 }
