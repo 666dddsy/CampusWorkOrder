@@ -71,6 +71,31 @@ public class TicketService {
             throw new IllegalStateException("failed to insert ticket log");
         return ticket;
     }
+    @Transactional
+    public Ticket startProcessing(Long ticketId,Long userId){
+        UserRole role=appUserMapper.selectRoleById(userId);
+        Ticket ticket=ticketMapper.selectById(ticketId);
+        if (role != UserRole.WORKER)
+            throw new BusinessException(HttpStatus.FORBIDDEN, "You don't have the right to process this ticket.");
+        if(ticket==null)
+            return null;
+        if (!userId.equals(ticket.getAssigneeId()))
+            throw new BusinessException(HttpStatus.FORBIDDEN, "You don't have the right to process this ticket.");
+        if (ticket.getStatus() != TicketStatus.ASSIGNED)
+            throw new BusinessException(HttpStatus.CONFLICT, "The status of ticket isn't assigned");
+        int rows=ticketMapper.updateProcessIfAssigned(ticketId,userId);
+        if(rows!=1)
+            throw new BusinessException(
+                    HttpStatus.CONFLICT,
+                    "Ticket status has changed"
+            );
+        ticket=ticketMapper.selectById(ticketId);
+        TicketLog ticketLog=toTicketLogProcessed(userId,ticket);
+        int logRows=ticketLogMapper.insert(ticketLog);
+        if(logRows!=1)
+            throw new IllegalStateException("failed to insert ticket log");
+        return ticket;
+    }
 
     public Ticket selectById(Long ticketId){
         return ticketMapper.selectById(ticketId);
@@ -126,4 +151,13 @@ public class TicketService {
         return ticketLog;
     }
 
+    private TicketLog toTicketLogProcessed(Long operatorId,Ticket ticket){
+        TicketLog ticketLog=new TicketLog();
+        ticketLog.setTicketId(ticket.getId());
+        ticketLog.setFromStatus(TicketStatus.ASSIGNED);
+        ticketLog.setToStatus(TicketStatus.PROCESSING);
+        ticketLog.setOperatorId(operatorId);
+        ticketLog.setNote("正在处理工单");
+        return ticketLog;
+    }
 }

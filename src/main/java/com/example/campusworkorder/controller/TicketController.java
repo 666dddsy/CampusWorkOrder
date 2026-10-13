@@ -34,6 +34,7 @@ public class TicketController {
             return ResponseEntity.ok(ticketResponse);
         }
     }
+
     @GetMapping("/assigned-to-me")
     public ResponseEntity<List<TicketResponse>> selectMyAssignedTickets(@RequestHeader("X-User-Id") Long currentUserId){
 
@@ -45,6 +46,7 @@ public class TicketController {
         }
         return ResponseEntity.ok(ticketResponse);
     }
+
     @GetMapping("/mine")
     public ResponseEntity<List<TicketResponse>> selectMyTickets(@RequestHeader("X-User-Id") Long creatorId){
         List<Ticket> tickets=ticketService.selectByCreatorId(creatorId);
@@ -55,6 +57,7 @@ public class TicketController {
         }
         return ResponseEntity.ok(ticketResponse);
     }
+
     @PostMapping
     public ResponseEntity<TicketResponse> createTicket(
             @RequestHeader("X-User-Id") Long creatorId,@Valid @RequestBody TicketCreateRequest ticketCreateRequest
@@ -65,6 +68,7 @@ public class TicketController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ticketResponse);
     }
+
     @PatchMapping("/{id}/assignment")
     public ResponseEntity<TicketResponse> assignTicket(
             @Valid @RequestBody TicketAssignRequest ticketAssignRequest,
@@ -78,6 +82,20 @@ public class TicketController {
         TicketResponse ticketResponse=toTicketResponse(ticket);
         return ResponseEntity.ok(ticketResponse);
     }
+
+    @PatchMapping("/{id}/processing")
+    public ResponseEntity<TicketResponse> processTicket(
+            @RequestHeader("X-User-Id") Long assigneeId,
+            @PathVariable Long id
+    ){
+        Ticket ticket=ticketService.startProcessing(id,assigneeId);
+        if(ticket==null)
+            return  ResponseEntity.notFound()
+                    .build();
+        TicketResponse ticketResponse=toTicketResponse(ticket);
+        return  ResponseEntity.ok(ticketResponse);
+    }
+
     private TicketResponse toTicketResponse(Ticket ticket){
         TicketResponse ticketResponse=new TicketResponse();
         ticketResponse.setAssigneeId(ticket.getAssigneeId());

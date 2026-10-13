@@ -97,4 +97,11 @@
         where id=#{ticketId} and status='CREATED'
     </update>
 
+    <update id="updateProcessIfAssigned">
+        update ticket set status='PROCESSING'
+        WHERE id = #{ticketId}
+        AND assignee_id = #{assigneeId}
+        AND status = 'ASSIGNED'
+    </update>
+
 </mapper>

@@ -1,20 +1,27 @@
-       # CampusWorkOrder 校园工单系统
+# CampusWorkOrder 校园工单系统
 
 CampusWorkOrder 是一个基于 Spring Boot、MyBatis 和 MySQL 实现的校园报修工单后端项目。
 
-项目围绕校园报修场景，划分报修人、维修人员和管理员三种角色，通过工单状态和状态变化日志记录报修处理过程。
+项目围绕校园报修场景，划分报修人、维修人员和管理员三种角色，通过工单当前状态和状态变化日志记录完整的报修处理过程。
 
 当前版本已经打通：
 
 ```text
-创建工单
+报修人创建工单
 → 查询工单
 → 报修人查看自己的工单
 → 管理员分配维修人员
 → 维修人员查看被分配的工单
+→ 维修人员开始处理工单
 ```
 
-项目仍在持续开发，目前重点是完成完整工单状态流、权限认证、分页筛选和部署。
+项目仍在持续开发，下一阶段将继续完成：
+
+```text
+PROCESSING → RESOLVED → CLOSED
+```
+
+随后再接入正式身份认证、分页筛选和部署。
 
 ---
 
@@ -27,13 +34,15 @@ CampusWorkOrder 是一个基于 Spring Boot、MyBatis 和 MySQL 实现的校园�
 - 报修人查询自己创建的工单列表。
 - 管理员为 `CREATED` 工单分配维修人员。
 - 维修人员查询自己被分配的工单列表。
+- 当前维修人员将自己的工单从 `ASSIGNED` 改为 `PROCESSING`。
 - 管理员和维修人员的基础角色校验。
+- 工单创建人和当前维修人员的数据范围隔离。
 - 请求参数校验和字段级错误响应。
 - 业务异常的统一处理。
 - 创建工单与写入创建日志的事务一致性。
-- 分配工单与写入状态日志的事务一致性。
-- 基于条件更新的重复分配和并发状态保护。
-- 报修人和维修人员列表的数据隔离。
+- 分配工单与写入分配日志的事务一致性。
+- 开始处理与写入处理日志的事务一致性。
+- 基于条件更新的重复分配、越权处理和并发状态保护。
 - Controller MockMvc 切片测试。
 - Service 真实数据库集成测试。
 - 事务失败回滚测试。
@@ -41,12 +50,12 @@ CampusWorkOrder 是一个基于 Spring Boot、MyBatis 和 MySQL 实现的校园�
 
 尚未实现：
 
-- 维修人员开始处理工单。
 - 维修人员标记工单已经解决。
 - 报修人确认工单关闭。
 - 管理员查看全部工单。
 - Spring Security、JWT 和正式登录认证。
-- 分页、筛选和生产环境部署。
+- 分页和条件筛选。
+- 生产环境部署。
 
 ---
 
@@ -58,7 +67,7 @@ CampusWorkOrder 是一个基于 Spring Boot、MyBatis 和 MySQL 实现的校园�
 CREATED
    ↓ 管理员分配维修人员
 ASSIGNED
-   ↓ 维修人员开始处理
+   ↓ 当前维修人员开始处理
 PROCESSING
    ↓ 维修人员完成维修
 RESOLVED
@@ -70,23 +79,26 @@ CLOSED
 |---|---|---|
 | `CREATED` | 报修人已经创建工单，等待管理员分配 | 已实现 |
 | `ASSIGNED` | 管理员已经分配维修人员 | 已实现 |
-| `PROCESSING` | 维修人员正在处理 | 尚未实现状态更新接口 |
+| `PROCESSING` | 维修人员正在处理 | 已实现 |
 | `RESOLVED` | 维修完成，等待报修人确认 | 尚未实现状态更新接口 |
 | `CLOSED` | 报修人确认问题解决，工单关闭 | 尚未实现状态更新接口 |
 
 当前真正实现的业务状态变化为：
 
 ```text
-CREATED → ASSIGNED
+CREATED → ASSIGNED → PROCESSING
 ```
 
-`seed.sql` 中包含五种状态的演示数据，用于数据库查询和页面展示验证，但这不代表所有状态变化接口都已经实现。
+`seed.sql` 中包含五种状态的演示数据，用于数据库查询和展示验证，但演示数据不代表所有状态变化接口都已经实现。
 
 状态不允许重复操作或跨级变化。例如：
 
 - 已经处于 `ASSIGNED` 状态的工单不能再次分配。
-- 当前版本不能直接把 `CREATED` 工单改为 `PROCESSING`。
-- 状态变化必须由对应业务方法执行，不能由客户端任意提交新状态。
+- 只有被分配的维修人员才能开始处理工单。
+- `CREATED` 工单不能直接变为 `PROCESSING`。
+- 已经处于 `PROCESSING` 状态的工单不能重复开始处理。
+- 客户端不能任意提交新的工单状态。
+- 状态变化必须由对应的 Service 业务方法执行。
 
 ---
 
@@ -95,7 +107,7 @@ CREATED → ASSIGNED
 | 角色 | 计划支持的功能 | 当前实现情况 |
 |---|---|---|
 | `REQUESTER` | 创建工单、查看自己的工单、确认关闭 | 已实现创建和个人列表查询 |
-| `WORKER` | 查看被分配的工单、开始处理、标记已解决 | 已实现被分配工单列表查询，状态处理尚未实现 |
+| `WORKER` | 查看被分配的工单、开始处理、标记已解决 | 已实现列表查询和开始处理 |
 | `ADMIN` | 查看全部工单、分配维修人员 | 已实现分配维修人员，全部工单查询尚未实现 |
 
 当前没有实现 Spring Security、JWT 或正式登录功能。
@@ -106,9 +118,9 @@ CREATED → ASSIGNED
 X-User-Id: 1
 ```
 
-`X-User-Id` 只是开发阶段用于打通业务链路的临时身份参数，可以由客户端自行填写，不能视为真正的用户认证。
+`X-User-Id` 只是开发阶段用于打通业务链路的临时身份参数，可以由客户端自行填写，不能视为真正的身份认证。
 
-当前角色校验能够证明：
+当前角色查询只能证明：
 
 ```text
 数据库中的这个用户 ID 对应某一种角色
@@ -121,6 +133,8 @@ X-User-Id: 1
 ```
 
 正式认证将在后续接入 Spring Security 后实现。
+
+即使接入正式认证，Service 中的数据归属校验仍然需要保留。例如，某个用户确实是 `WORKER`，并不代表他可以处理所有维修人员的工单。
 
 ---
 
@@ -204,7 +218,7 @@ Controller 负责：
 
 - 接收 HTTP 请求。
 - 读取路径参数、请求头和 JSON 请求体。
-- 触发参数校验。
+- 触发请求参数校验。
 - 调用 Service。
 - 将实体对象转换为响应 DTO。
 - 返回合适的 HTTP 状态码。
@@ -216,12 +230,13 @@ Controller 不直接访问 Mapper，也不负责实现事务和业务状态规�
 Service 负责：
 
 - 用户角色校验。
+- 工单数据归属校验。
 - 工单状态校验。
 - 业务规则判断。
 - 事务边界。
 - 调用多个 Mapper 完成一个完整业务操作。
-- 将数据库受影响行数转换为业务结果或异常。
-- 保证工单状态与状态日志的一致性。
+- 将数据库受影响行数转换为业务结果或业务异常。
+- 保证工单当前状态与状态日志的一致性。
 
 ### Mapper
 
@@ -232,7 +247,7 @@ Mapper 负责：
 - 更新工单状态和维修人员。
 - 将数据库记录映射为 Java 实体对象。
 
-Mapper 不负责决定 HTTP 状态码，也不负责完整业务规则。
+Mapper 不负责决定 HTTP 状态码，也不负责完整的业务规则。
 
 ---
 
@@ -250,8 +265,6 @@ ticket_log
 
 保存用户基础信息和角色。
 
-主要字段：
-
 | 字段 | 含义 |
 |---|---|
 | `id` | 用户主键 |
@@ -265,8 +278,6 @@ ticket_log
 ### ticket
 
 保存工单当前状态、报修人和维修人员。
-
-主要字段：
 
 | 字段 | 含义 |
 |---|---|
@@ -315,8 +326,6 @@ CLOSED
 
 保存工单创建和状态变化记录。
 
-主要字段：
-
 | 字段 | 含义 |
 |---|---|
 | `id` | 日志主键 |
@@ -332,6 +341,7 @@ CLOSED
 ```text
 from_status = null
 to_status = CREATED
+operator_id = creatorId
 ```
 
 管理员分配时记录：
@@ -339,6 +349,15 @@ to_status = CREATED
 ```text
 from_status = CREATED
 to_status = ASSIGNED
+operator_id = adminId
+```
+
+维修人员开始处理时记录：
+
+```text
+from_status = ASSIGNED
+to_status = PROCESSING
+operator_id = 当前维修人员 ID
 ```
 
 ---
@@ -357,9 +376,23 @@ idx_ticket_log_ticket_time(ticket_id, created_at)
 用途：
 
 - `idx_ticket_creator_id`：支持报修人查询自己创建的工单。
-- `idx_ticket_assignee_status`：支持维修人员按 `assignee_id` 查询被分配工单，也为后续按维修人员和状态筛选做准备。
+- `idx_ticket_assignee_status`：支持维修人员按 `assignee_id` 查询工单，也支持按照维修人员和状态执行条件更新或筛选。
 - `idx_ticket_status_created_at`：支持按状态和创建时间查询。
 - `idx_ticket_log_ticket_time`：支持查询一张工单的状态变化历史。
+
+联合索引：
+
+```text
+(assignee_id, status)
+```
+
+遵循最左前缀原则。
+
+因此：
+
+- 只按 `assignee_id` 查询可以使用该索引。
+- 同时按 `assignee_id` 和 `status` 查询可以使用该索引。
+- 只按 `status` 查询时，通常不能高效使用该联合索引，需要结合 `EXPLAIN` 判断实际执行计划。
 
 列表查询使用：
 
@@ -369,7 +402,7 @@ ORDER BY created_at DESC, id DESC
 
 `created_at DESC` 让较新的工单排在前面。
 
-`id DESC` 用于在创建时间相同时提供稳定顺序，避免后续分页时同一条记录在相邻页面之间不稳定移动。
+`id DESC` 用于在创建时间相同时提供稳定顺序，避免相同创建时间的记录出现不确定顺序。
 
 ---
 
@@ -410,11 +443,7 @@ mysql --version
 mysql -u root -p
 ```
 
-输入密码后进入 MySQL。
-
 ### 2. 执行表结构脚本
-
-在 MySQL 客户端中执行：
 
 ```sql
 SOURCE D:/codejava/CampusWorkOrder/sql/schema.sql;
@@ -444,7 +473,9 @@ SOURCE D:/codejava/CampusWorkOrder/sql/seed.sql;
 
 如果数据库中已经存在相同固定 ID 或用户名，重复执行 `seed.sql` 可能产生主键或唯一索引冲突。
 
-如需重新初始化，应先使用独立测试数据库或手动清理旧演示数据，不要在包含正式数据的数据库中直接删除。
+如需重新初始化，应使用独立测试数据库，或者先手动清理旧的演示数据。
+
+不要在包含正式数据的数据库中直接执行清空操作。
 
 ---
 
@@ -468,9 +499,7 @@ $env:DB_USER="root"
 $env:DB_PASSWORD="你的MySQL密码"
 ```
 
-这种写法只对当前 PowerShell 窗口有效。
-
-关闭该窗口后，环境变量不会继续保留。
+这种设置只对当前 PowerShell 窗口有效。
 
 检查变量：
 
@@ -503,6 +532,12 @@ $env:DB_USER="root"
 $env:DB_PASSWORD="你的MySQL密码"
 ```
 
+运行测试：
+
+```powershell
+mvn test
+```
+
 启动项目：
 
 ```powershell
@@ -515,23 +550,11 @@ mvn spring-boot:run
 http://localhost:8080
 ```
 
-如果修改了代码，也可以先执行：
-
-```powershell
-mvn clean test
-```
-
-然后启动：
-
-```powershell
-mvn spring-boot:run
-```
-
 ---
 
 ## API 接口
 
-当前共实现五个接口：
+当前共实现六个接口：
 
 | 方法 | URL | 功能 |
 |---|---|---|
@@ -540,6 +563,7 @@ mvn spring-boot:run
 | `GET` | `/tickets/mine` | 查询当前报修人创建的工单 |
 | `PATCH` | `/tickets/{id}/assignment` | 管理员分配维修人员 |
 | `GET` | `/tickets/assigned-to-me` | 维修人员查询被分配的工单 |
+| `PATCH` | `/tickets/{id}/processing` | 当前维修人员开始处理工单 |
 
 ---
 
@@ -565,7 +589,7 @@ Content-Type: application/json
 }
 ```
 
-PowerShell 请求示例：
+PowerShell 示例：
 
 ```powershell
 curl.exe -i -X POST "http://localhost:8080/tickets" `
@@ -576,13 +600,9 @@ curl.exe -i -X POST "http://localhost:8080/tickets" `
 
 ### 成功响应
 
-成功时返回：
-
 ```text
 201 Created
 ```
-
-响应体示例：
 
 ```json
 {
@@ -595,7 +615,7 @@ curl.exe -i -X POST "http://localhost:8080/tickets" `
   "category": "PLUMBING",
   "priority": "HIGH",
   "status": "CREATED",
-  "createdAt": "2026-10-12T14:30:00"
+  "createdAt": "2026-10-13T14:30:00"
 }
 ```
 
@@ -649,25 +669,21 @@ PowerShell 示例：
 curl.exe -i "http://localhost:8080/tickets/1"
 ```
 
-### 工单存在
-
-返回：
+工单存在时返回：
 
 ```text
 200 OK
 ```
 
-### 工单不存在
-
-返回：
+工单不存在时返回：
 
 ```text
 404 Not Found
 ```
 
-当前详情接口尚未进行用户身份和工单归属校验，知道工单 ID 的请求者可以查询该工单。
+当前详情接口尚未进行用户身份和工单归属校验。
 
-这属于当前版本限制，后续需要增加角色和数据归属判断。
+知道工单 ID 的请求者目前可以查询该工单，这属于当前版本的明确限制。
 
 ---
 
@@ -694,31 +710,10 @@ WHERE creator_id = #{creatorId}
 ORDER BY created_at DESC, id DESC
 ```
 
-### 查询成功
-
-返回：
+查询成功时返回：
 
 ```text
 200 OK
-```
-
-响应体示例：
-
-```json
-[
-  {
-    "id": 6,
-    "creatorId": 1,
-    "assigneeId": null,
-    "title": "宿舍水管漏水",
-    "description": "洗手池下方持续漏水",
-    "location": "学生宿舍3栋201",
-    "category": "PLUMBING",
-    "priority": "HIGH",
-    "status": "CREATED",
-    "createdAt": "2026-10-12T14:30:00"
-  }
-]
 ```
 
 没有符合条件的工单时返回：
@@ -731,15 +726,7 @@ ORDER BY created_at DESC, id DESC
 []
 ```
 
-空列表表示：
-
-```text
-用户存在，但目前没有符合查询条件的工单
-```
-
-因此不返回 `404 Not Found`。
-
-该接口已经使用不同用户 ID 进行了真实数据隔离验证，只返回对应 `creator_id` 的工单。
+空列表表示用户存在、查询成功，但目前没有符合条件的工单，因此不返回 404。
 
 ---
 
@@ -761,12 +748,6 @@ Content-Type: application/json
 }
 ```
 
-其中：
-
-- URL 中的 `{id}` 是需要分配的工单 ID。
-- `X-User-Id` 是执行分配操作的管理员 ID。
-- 请求体中的 `assigneeId` 是目标维修人员 ID。
-
 PowerShell 示例：
 
 ```powershell
@@ -778,13 +759,9 @@ curl.exe -i -X PATCH "http://localhost:8080/tickets/1/assignment" `
 
 ### 成功响应
 
-成功时返回：
-
 ```text
 200 OK
 ```
-
-响应体中的关键字段：
 
 ```json
 {
@@ -800,7 +777,7 @@ curl.exe -i -X PATCH "http://localhost:8080/tickets/1/assignment" `
 |---|---|
 | `400 Bad Request` | 缺少 `assigneeId`，或者目标用户不是 `WORKER` |
 | `403 Forbidden` | 操作人不是 `ADMIN` |
-| `404 Not Found` | 工单、操作人或目标用户不存在 |
+| `404 Not Found` | 工单不存在 |
 | `409 Conflict` | 工单状态不是 `CREATED`，或者并发更新失败 |
 
 业务异常响应格式：
@@ -811,9 +788,7 @@ curl.exe -i -X PATCH "http://localhost:8080/tickets/1/assignment" `
 }
 ```
 
-### 重复分配保护
-
-真正执行更新时，SQL 不只按工单 ID 更新，还要求旧状态是 `CREATED`：
+真正执行更新时，SQL 同时限制工单 ID 和旧状态：
 
 ```sql
 UPDATE ticket
@@ -823,24 +798,7 @@ WHERE id = #{ticketId}
   AND status = 'CREATED'
 ```
 
-即使 Service 已经提前查询过状态，更新语句仍保留状态条件，用于防止：
-
-- 同一工单被重复分配。
-- 两名管理员同时分配同一工单时都成功。
-- 查询状态后、执行更新前，工单被其他请求修改。
-
-两个并发请求分配同一张 `CREATED` 工单时，预期结果为：
-
-```text
-一个请求更新 1 行并成功
-另一个请求更新 0 行并返回 409
-```
-
-数据库中最终只能：
-
-- 成功分配一次。
-- 保存一个 `assignee_id`。
-- 写入一条 `CREATED → ASSIGNED` 日志。
+两个并发请求分配同一张工单时，预期只有一个请求更新成功。
 
 ---
 
@@ -860,9 +818,7 @@ curl.exe -i "http://localhost:8080/tickets/assigned-to-me" `
   -H "X-User-Id: 3"
 ```
 
-### 查询成功
-
-返回：
+查询成功时返回：
 
 ```text
 200 OK
@@ -873,25 +829,21 @@ curl.exe -i "http://localhost:8080/tickets/assigned-to-me" `
 ```json
 [
   {
-    "id": 2,
-    "creatorId": 2,
+    "id": 13,
+    "creatorId": 1,
     "assigneeId": 3,
-    "title": "教室投影仪无法启动",
-    "description": "按下电源按钮后没有反应",
-    "location": "明德楼201",
-    "category": "EQUIPMENT",
-    "priority": "HIGH",
+    "title": "Git Bash test ticket",
+    "description": "Test POST transaction and log",
+    "location": "Room 412",
+    "category": "PLUMBING",
+    "priority": "MEDIUM",
     "status": "ASSIGNED",
-    "createdAt": "2026-10-06T10:10:00"
+    "createdAt": "2026-10-09T22:13:16"
   }
 ]
 ```
 
 没有被分配工单时返回：
-
-```text
-200 OK
-```
 
 ```json
 []
@@ -903,24 +855,134 @@ curl.exe -i "http://localhost:8080/tickets/assigned-to-me" `
 403 Forbidden
 ```
 
-示例：
-
-```json
-{
-  "message": "UserRole should be 'WORKER'"
-}
-```
-
-该接口不接受客户端通过查询参数传入任意 `assigneeId`，而是直接使用请求头中的当前用户 ID：
+该接口不接受客户端通过查询参数传入任意 `assigneeId`，而是使用当前请求头中的用户 ID：
 
 ```sql
 WHERE assignee_id = #{assigneeId}
 ORDER BY created_at DESC, id DESC
 ```
 
-这样可以在当前开发期身份方案下，避免调用者通过普通查询参数选择其他维修人员 ID。
+这能够实现当前开发阶段的业务数据隔离，但不能代替正式身份认证。
 
-但是，由于 `X-User-Id` 仍然可以被客户端伪造，因此这只能实现业务层数据隔离，不能代替真正的身份认证。
+---
+
+## 6. 维修人员开始处理工单
+
+### 请求
+
+```http
+PATCH /tickets/{id}/processing
+X-User-Id: 3
+```
+
+该接口不需要 JSON 请求体。
+
+客户端不能自行提交：
+
+```json
+{
+  "status": "PROCESSING"
+}
+```
+
+新状态由“开始处理”这个业务动作决定，防止客户端任意选择或跳过状态。
+
+PowerShell 示例：
+
+```powershell
+curl.exe -i -X PATCH "http://localhost:8080/tickets/13/processing" `
+  -H "X-User-Id: 3"
+```
+
+### 成功响应
+
+成功时返回：
+
+```text
+200 OK
+```
+
+响应体示例：
+
+```json
+{
+  "id": 13,
+  "creatorId": 1,
+  "assigneeId": 3,
+  "title": "Git Bash test ticket",
+  "description": "Test POST transaction and log",
+  "location": "Room 412",
+  "category": "PLUMBING",
+  "priority": "MEDIUM",
+  "status": "PROCESSING",
+  "createdAt": "2026-10-09T22:13:16"
+}
+```
+
+### 失败状态
+
+| HTTP 状态 | 含义 |
+|---|---|
+| `403 Forbidden` | 当前用户不是 `WORKER`，或者工单不属于当前维修人员 |
+| `404 Not Found` | 工单不存在 |
+| `409 Conflict` | 工单当前状态不是 `ASSIGNED`，或者条件更新因并发修改而失败 |
+
+403 响应示例：
+
+```json
+{
+  "message": "You don't have the right to process this ticket."
+}
+```
+
+409 响应示例：
+
+```json
+{
+  "message": "The status of ticket isn't assigned"
+}
+```
+
+### 数据归属和状态保护
+
+开始处理时不能只按照工单 ID 更新。
+
+真正执行的条件更新同时限制：
+
+- 工单 ID。
+- 当前维修人员 ID。
+- 工单旧状态。
+
+```sql
+UPDATE ticket
+SET status = 'PROCESSING'
+WHERE id = #{ticketId}
+  AND assignee_id = #{assigneeId}
+  AND status = 'ASSIGNED'
+```
+
+这样能够防止：
+
+- 非当前处理人操作他人的工单。
+- `CREATED` 工单跳过分配直接进入处理状态。
+- 已经处于 `PROCESSING` 状态的工单重复开始处理。
+- 前置查询完成后，工单被另一个并发请求修改。
+- 两个请求同时开始处理并重复写入状态日志。
+
+条件更新必须影响 1 行。
+
+如果影响行数不是 1，Service 会将其转换为业务冲突，不继续写入 PROCESSING 日志。
+
+### 真实 HTTP 验证
+
+当前已经使用工单 id=13 进行了真实验证：
+
+1. 用户 3 查询 `/tickets/assigned-to-me`，返回 200，id=13 的初始状态为 `ASSIGNED`。
+2. 无权限用户 2 请求 `/tickets/13/processing`，返回 403。
+3. 实际处理人用户 3 请求 `/tickets/13/processing`，返回 200。
+4. 响应中 id=13 的状态变为 `PROCESSING`，`assigneeId` 仍为 3。
+
+“另一个 WORKER 操作他人工单”的情况已经由真实数据库 Service 集成测试覆盖。
 
 ---
 
@@ -946,24 +1008,14 @@ Controller 接收并校验请求
 → 返回 201 Created
 ```
 
-创建日志内容：
-
-```text
-from_status = null
-to_status = CREATED
-operator_id = creatorId
-```
-
-如果日志插入失败，已经插入的工单也必须回滚。
+如果创建日志插入失败，已经插入的工单必须回滚。
 
 数据库中不能留下：
 
 ```text
 存在 ticket
-但没有对应创建日志
+但没有对应的 CREATED 日志
 ```
-
-该事务边界位于 Service 对外业务方法上。
 
 ---
 
@@ -979,9 +1031,9 @@ operator_id = creatorId
 6. 确认工单当前状态为 `CREATED`。
 7. 使用条件更新写入 `assignee_id` 并把状态改为 `ASSIGNED`。
 8. 写入一条 `CREATED → ASSIGNED` 状态日志。
-9. 重新查询并返回更新后的工单。
+9. 返回更新后的工单。
 
-如果状态日志写入失败，工单更新也必须回滚。
+如果日志写入失败，工单更新也必须回滚。
 
 回滚后保持：
 
@@ -990,7 +1042,40 @@ status = CREATED
 assignee_id = null
 ```
 
-这样可以避免工单已经分配，但状态变化日志缺失。
+---
+
+## 维修人员开始处理事务
+
+维修人员开始处理工单时，需要在一个事务中完成：
+
+1. 查询当前用户角色。
+2. 确认当前用户为 `WORKER`。
+3. 查询目标工单。
+4. 确认工单属于当前维修人员。
+5. 确认工单状态为 `ASSIGNED`。
+6. 使用条件更新把状态改为 `PROCESSING`。
+7. 重新查询更新后的工单。
+8. 写入一条 `ASSIGNED → PROCESSING` 状态日志。
+9. 返回更新后的完整工单。
+
+状态日志内容：
+
+```text
+from_status = ASSIGNED
+to_status = PROCESSING
+operator_id = 当前维修人员 ID
+```
+
+如果 PROCESSING 日志写入失败，工单状态更新必须回滚。
+
+回滚后保持：
+
+```text
+status = ASSIGNED
+assignee_id = 原维修人员 ID
+```
+
+这样可以避免工单已经进入处理中状态，但数据库中没有对应的状态变化记录。
 
 ---
 
@@ -999,12 +1084,12 @@ assignee_id = null
 SQL 参数使用 MyBatis `#{}` 绑定：
 
 ```sql
-WHERE creator_id = #{creatorId}
+WHERE assignee_id = #{assigneeId}
 ```
 
 参数通过预编译方式传入，而不是直接拼接到 SQL 字符串中。
 
-项目不使用 `${}` 拼接普通用户输入，避免 SQL 结构被输入内容改变。
+项目不使用 `${}` 拼接普通用户输入，避免输入内容改变 SQL 结构。
 
 ---
 
@@ -1036,8 +1121,6 @@ createdAt
 updatedAt
 ```
 
-该配置负责处理数据库下划线命名和 Java 驼峰命名之间的转换。
-
 ---
 
 ## 测试
@@ -1048,16 +1131,18 @@ updatedAt
 mvn test
 ```
 
-当前共有 22 条测试：
+当前共有 30 条测试：
 
-- 15 条 `TicketController` MockMvc 测试。
-- 4 条 Service 真实数据库集成测试。
-- 2 条事务失败回滚测试。
+- 19 条 `TicketController` MockMvc 测试。
+- 7 条 Service 真实数据库集成测试。
+- 3 条事务失败回滚测试。
 - 1 条 Spring 上下文启动测试。
+
+用户已经在本机执行全部测试并确认通过。
 
 ### Controller 测试
 
-当前覆盖：
+当前共有 19 条 Controller MockMvc 测试：
 
 1. 合法创建请求返回 `201`。
 2. 空标题返回 `400`。
@@ -1067,13 +1152,17 @@ mvn test
 6. 工单详情不存在时返回 `404`。
 7. 查询报修人个人工单列表返回 `200`。
 8. 报修人个人工单列表为空时返回 `200 + []`。
-9. 管理员成功分配工单时返回 `200`，并返回正确的 `ASSIGNED` 状态和 `assigneeId`。
+9. 管理员成功分配工单时返回 `200`。
 10. 分配请求缺少 `assigneeId` 时返回 `400`。
 11. 重复分配或状态冲突时返回 `409`。
 12. 非管理员执行分配时返回 `403`。
 13. 维修人员查询被分配工单时返回 `200` 和正确列表。
 14. 维修人员没有被分配工单时返回 `200 + []`。
 15. 非维修人员调用被分配工单接口时返回 `403`。
+16. 维修人员成功开始处理工单时返回 `200` 和 `PROCESSING`。
+17. 开始处理的工单不存在时返回 `404`。
+18. 无权限用户开始处理工单时返回 `403`。
+19. 工单状态不允许开始处理时返回 `409`。
 
 Controller 测试使用模拟的 Service，不连接真实数据库，主要验证：
 
@@ -1086,44 +1175,34 @@ Controller 测试使用模拟的 Service，不连接真实数据库，主要验�
 
 ### Service 集成测试
 
-Service 集成测试连接真实 MySQL，当前共有 4 条测试方法，覆盖：
+Service 集成测试连接真实 MySQL，当前共有 7 条测试：
 
 1. 创建工单时同时插入工单和创建日志，并正确回填数据库生成的主键。
-2. 管理员分配后，工单状态变为 `ASSIGNED`、`assignee_id` 正确保存，并写入状态变化日志。
-3. 重复分配已经处于 `ASSIGNED` 状态的工单时操作被拒绝，并且不会写入第二条分配日志。
+2. 管理员分配后，工单状态变为 `ASSIGNED`、`assignee_id` 正确保存，并写入分配日志。
+3. 重复分配已经处于 `ASSIGNED` 状态的工单时返回冲突，并且不会写入第二条分配日志。
 4. 两个维修人员存在不同工单时，只能查询到分配给自己的工单，并按 `created_at DESC, id DESC` 排序。
+5. 当前维修人员开始处理工单后，状态变为 `PROCESSING`，assigneeId 不变，并写入一条处理日志。
+6. 另一个 `WORKER` 尝试处理不属于自己的工单时返回 403，状态和日志均不变化。
+7. 尝试处理 `CREATED` 或已经处于 `PROCESSING` 状态的工单时返回 409，并且不会新增处理日志。
 
 ### 事务回滚测试
 
-当前共有 2 条事务回滚测试：
+当前共有 3 条事务回滚测试：
 
 1. 创建日志写入失败时，已经插入的工单整体回滚。
 2. 分配日志写入失败时，工单状态和维修人员字段整体回滚。
-
-分配回滚后应保持：
-
-```text
-status = CREATED
-assignee_id = null
-```
+3. PROCESSING 日志写入失败时，工单状态从 `PROCESSING` 回滚为 `ASSIGNED`，维修人员 ID 保持不变。
 
 ### 测试分层
 
-Controller 测试、Service 集成测试和真实 HTTP 请求关注的范围不同，不能完全互相替代。
+Controller 测试、Service 集成测试、回滚测试和真实 HTTP 请求关注的范围不同，不能完全互相替代。
 
 | 测试方式 | 主要验证内容 |
 |---|---|
-| Controller MockMvc | HTTP 参数、校验、状态码、JSON 和 Controller 调用 |
+| Controller MockMvc | HTTP 参数、路由、状态码、JSON 和 Controller 调用 |
 | Service 集成测试 | 业务规则、MyBatis、SQL 和真实数据库结果 |
 | 事务回滚测试 | 多次数据库写入失败后的整体回滚 |
 | 真实 HTTP 验证 | 应用启动后的完整请求链路和实际数据库结果 |
-
-当前已对维修人员列表进行真实数据隔离验证：
-
-- worker A 只能查询到 `assignee_id=A` 的工单。
-- worker B 的工单不会出现在 worker A 的结果中。
-- 空列表返回 `200 + []`。
-- 非 `WORKER` 用户返回 `403`。
 
 ---
 
@@ -1149,19 +1228,27 @@ Controller 测试、Service 集成测试和真实 HTTP 请求关注的范围不�
 - [x] 实现重复分配冲突处理
 - [x] 实现分配成功日志
 - [x] 实现分配事务及失败回滚
-- [x] 完成分配接口真实 HTTP 的 `200`、`403`、`409` 验证
+- [x] 完成分配接口真实 HTTP 验证
 - [x] 完成分配接口 Controller MockMvc 测试
 - [x] 实现 `GET /tickets/assigned-to-me`
 - [x] 完成维修人员列表的 Controller MockMvc 测试
 - [x] 完成维修人员列表的真实数据隔离验证
-- [x] 完成 15 条 Controller MockMvc 测试
-- [x] 完成 4 条 Service 真实数据库集成测试
-- [x] 完成 2 条事务失败回滚测试
+- [x] 实现 `PATCH /tickets/{id}/processing`
+- [x] 实现 `ASSIGNED → PROCESSING`
+- [x] 实现维修人员归属校验
+- [x] 实现开始处理的条件更新
+- [x] 实现 PROCESSING 状态日志
+- [x] 实现开始处理事务及失败回滚
+- [x] 完成 processing 接口真实 HTTP 验证
+- [x] 完成 processing 接口 Controller MockMvc 测试
+- [x] 完成其他 WORKER 越权处理测试
+- [x] 完成非法状态处理测试
+- [x] 完成 19 条 Controller MockMvc 测试
+- [x] 完成 7 条 Service 真实数据库集成测试
+- [x] 完成 3 条事务失败回滚测试
 - [ ] 实现管理员查看全部工单
-- [ ] 实现 `ASSIGNED → PROCESSING`
 - [ ] 实现 `PROCESSING → RESOLVED`
 - [ ] 实现 `RESOLVED → CLOSED`
-- [ ] 实现其他非法状态变化处理
 - [ ] 实现正式登录和权限认证
 - [ ] 增加分页和筛选
 - [ ] 完成部署
@@ -1176,10 +1263,11 @@ Controller 测试、Service 集成测试和真实 HTTP 请求关注的范围不�
 - 创建工单接口还没有校验请求人是否为 `REQUESTER`。
 - 工单详情接口尚未进行归属和角色权限校验。
 - 尚未实现管理员查看全部工单。
-- 维修人员目前只能查看被分配的工单，尚未实现开始处理和标记解决。
-- 状态流目前只实现了 `CREATED → ASSIGNED`。
+- 维修人员已经可以开始处理工单，但尚未实现标记维修完成。
+- 报修人尚未实现确认关闭。
+- 状态流目前实现到 `CREATED → ASSIGNED → PROCESSING`。
 - 列表接口没有分页、筛选和数量限制。
-- 分配接口使用条件更新进行基础并发保护，但尚未实现版本号或完整的乐观锁机制。
+- 状态更新使用条件更新进行基础并发保护，但尚未实现版本号或完整的乐观锁机制。
 - 尚未实现统一的业务错误码。
 - 尚未进行生产环境部署。
 
@@ -1200,7 +1288,7 @@ Controller 测试、Service 集成测试和真实 HTTP 请求关注的范围不�
 - 微服务拆分。
 - 分布式事务。
 - Kubernetes。
-- 复杂的组织架构和多租户系统。
+- 复杂组织架构和多租户系统。
 
 第一版优先完成：
 
@@ -1218,16 +1306,16 @@ Controller 测试、Service 集成测试和真实 HTTP 请求关注的范围不�
 
 后续按照以下顺序继续开发：
 
-1. 实现维修人员将工单从 `ASSIGNED` 改为 `PROCESSING`。
-2. 实现维修人员将工单从 `PROCESSING` 改为 `RESOLVED`。
-3. 实现报修人将工单从 `RESOLVED` 改为 `CLOSED`。
-4. 为每次状态变化增加条件更新、状态日志和事务回滚测试。
-5. 实现管理员查看全部工单。
-6. 修复工单详情接口的越权查询问题。
-7. 接入 Spring Security 和正式登录认证。
-8. 增加分页、状态筛选、分类筛选和优先级筛选。
-9. 增加统一业务错误码。
-10. 完成项目部署和简历项目说明。
+1. 实现维修人员将工单从 `PROCESSING` 改为 `RESOLVED`。
+2. 实现报修人将工单从 `RESOLVED` 改为 `CLOSED`。
+3. 为每次状态变化增加条件更新、状态日志和事务回滚测试。
+4. 实现管理员查看全部工单。
+5. 修复工单详情接口的越权查询问题。
+6. 接入 Spring Security 和正式登录认证。
+7. 增加分页、状态筛选、分类筛选和优先级筛选。
+8. 增加统一业务错误码。
+9. 完成项目部署。
+10. 整理项目演示、简历描述和面试问答。
 
 ---
 
@@ -1241,8 +1329,9 @@ Controller 测试、Service 集成测试和真实 HTTP 请求关注的范围不�
 - 请求 DTO 与数据库实体分离。
 - 客户端不能直接决定工单状态。
 - 状态更新必须同时校验旧状态。
+- 需要数据归属的操作必须校验当前用户 ID。
 - 工单当前状态和状态变化日志必须保持一致。
 - 列表无数据时返回空数组，不返回 `null` 或 `404`。
-- 用户只能查询业务规则允许的数据。
+- 用户只能查询和操作业务规则允许的数据。
 - 测试数据使用唯一值，并避免污染演示数据。
 - 已完成能力与计划能力在 README 中明确区分。

@@ -330,4 +330,50 @@ public class TicketControllerTest {
                 .andExpect(jsonPath("$.message").value("UserRole should be 'WORKER'"));
         verify(ticketService).selectMyAssignedTickets(3L);
     }
+    @Test
+    void processTicket_shouldReturn200()throws Exception{
+        Ticket ticket=exampleTicket();
+        ticket.setAssigneeId(3L);
+        ticket.setStatus(TicketStatus.PROCESSING);
+        when(ticketService.startProcessing(eq(ticket.getId()),eq(3L)))
+                .thenReturn(ticket);
+        mockMvc.perform(patch("/tickets/101/processing")
+                .header("X-User-Id","3"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(101))
+                .andExpect(jsonPath("$.creatorId").value(12))
+                .andExpect(jsonPath("$.assigneeId").value(3))
+                .andExpect(jsonPath("$.status").value("PROCESSING"));
+        verify(ticketService).startProcessing(101L, 3L);
+    }
+    @Test
+    void processTicket_shouldReturn404()throws Exception{
+        when(ticketService.startProcessing(eq(101L),eq(3L)))
+                .thenReturn(null);
+        mockMvc.perform(patch("/tickets/101/processing")
+                        .header("X-User-Id","3"))
+                .andExpect(status().isNotFound());
+        verify(ticketService).startProcessing(101L, 3L);
+    }
+    @Test
+    void processTicket_shouldReturn403()throws Exception{
+        when(ticketService.startProcessing(eq(101L),eq(5L)))
+                .thenThrow(new BusinessException(HttpStatus.FORBIDDEN,"You don't have the right to process this ticket."));
+        mockMvc.perform(patch("/tickets/101/processing")
+                        .header("X-User-Id","5"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You don't have the right to process this ticket."));
+        verify(ticketService).startProcessing(101L, 5L);
+    }
+    @Test
+    void processTicket_shouldReturn409()throws Exception{
+        when(ticketService.startProcessing(eq(101L),eq(3L)))
+                .thenThrow(new BusinessException(HttpStatus.CONFLICT,"The status of ticket isn't assigned"));
+        mockMvc.perform(patch("/tickets/101/processing")
+                        .header("X-User-Id","3"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message")
+                        .value("The status of ticket isn't assigned"));
+        verify(ticketService).startProcessing(101L, 3L);
+    }
 }
