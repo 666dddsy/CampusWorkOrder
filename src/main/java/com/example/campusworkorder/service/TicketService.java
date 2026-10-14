@@ -4,6 +4,7 @@ import com.example.campusworkorder.domain.enums.TicketStatus;
 import com.example.campusworkorder.domain.enums.UserRole;
 import com.example.campusworkorder.dto.TicketAssignRequest;
 import com.example.campusworkorder.dto.TicketCreateRequest;
+import com.example.campusworkorder.dto.TicketResolveRequest;
 import com.example.campusworkorder.entity.Ticket;
 import com.example.campusworkorder.entity.TicketLog;
 import com.example.campusworkorder.exception.BusinessException;
@@ -96,6 +97,28 @@ public class TicketService {
             throw new IllegalStateException("failed to insert ticket log");
         return ticket;
     }
+    @Transactional
+    public Ticket resolveTicket(Long ticketId, Long userId, TicketResolveRequest ticketResolveRequest){
+        Ticket ticket=ticketMapper.selectById(ticketId);
+        UserRole role=appUserMapper.selectRoleById(userId);
+        if(role!=UserRole.WORKER)
+            throw new BusinessException(HttpStatus.FORBIDDEN,"You don't have the right to resolve this ticket.");
+        if(ticket==null)
+            return null;
+        if(!userId.equals(ticket.getAssigneeId()))
+            throw new BusinessException(HttpStatus.FORBIDDEN,"You don't have the right to resolve this ticket.");
+        if(ticket.getStatus()!=TicketStatus.PROCESSING)
+            throw new BusinessException(HttpStatus.CONFLICT,"The ticket didn't start processing or has been resolved");
+        int rows=ticketMapper.updateResolveIfProcessing(ticketId,userId);
+        if(rows!=1)
+            throw new BusinessException(HttpStatus.CONFLICT,"The ticket has been resolved");
+        ticket=ticketMapper.selectById(ticketId);
+        TicketLog ticketLog=toticketLogResolved(userId,ticket,ticketResolveRequest.getResolutionNote());
+        int logRows=ticketLogMapper.insert(ticketLog);
+        if(logRows!=1)
+            throw new IllegalStateException("failed to insert ticket log");
+        return ticket;
+    }
 
     public Ticket selectById(Long ticketId){
         return ticketMapper.selectById(ticketId);
@@ -158,6 +181,16 @@ public class TicketService {
         ticketLog.setToStatus(TicketStatus.PROCESSING);
         ticketLog.setOperatorId(operatorId);
         ticketLog.setNote("正在处理工单");
+        return ticketLog;
+    }
+
+    private TicketLog toticketLogResolved(Long operatorId,Ticket ticket,String note){
+        TicketLog ticketLog=new TicketLog();
+        ticketLog.setTicketId(ticket.getId());
+        ticketLog.setFromStatus(TicketStatus.PROCESSING);
+        ticketLog.setToStatus(TicketStatus.RESOLVED);
+        ticketLog.setOperatorId(operatorId);
+        ticketLog.setNote(note);
         return ticketLog;
     }
 }

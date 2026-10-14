@@ -2,6 +2,7 @@ package com.example.campusworkorder.controller;
 
 import com.example.campusworkorder.dto.TicketAssignRequest;
 import com.example.campusworkorder.dto.TicketCreateRequest;
+import com.example.campusworkorder.dto.TicketResolveRequest;
 import com.example.campusworkorder.dto.TicketResponse;
 import com.example.campusworkorder.entity.Ticket;
 import com.example.campusworkorder.service.TicketService;
@@ -91,6 +92,20 @@ public class TicketController {
         Ticket ticket=ticketService.startProcessing(id,assigneeId);
         if(ticket==null)
             return  ResponseEntity.notFound()
+                    .build();
+        TicketResponse ticketResponse=toTicketResponse(ticket);
+        return  ResponseEntity.ok(ticketResponse);
+    }
+
+    @PatchMapping("/{id}/resolution")
+    public ResponseEntity<TicketResponse> resolveTicket(
+            @Valid @RequestBody TicketResolveRequest ticketResolveRequest,
+            @RequestHeader("X-User-Id") Long assigneeId,
+            @PathVariable Long id
+    ){
+        Ticket ticket=ticketService.resolveTicket(id,assigneeId,ticketResolveRequest);
+        if(ticket==null)
+            return ResponseEntity.notFound()
                     .build();
         TicketResponse ticketResponse=toTicketResponse(ticket);
         return  ResponseEntity.ok(ticketResponse);

@@ -18,7 +18,7 @@ CampusWorkOrder 是一个基于 Spring Boot、MyBatis 和 MySQL 实现的校园�
 项目仍在持续开发，下一阶段将继续完成：
 
 ```text
-PROCESSING → RESOLVED → CLOSED
+RESOLVED → CLOSED
 ```
 
 随后再接入正式身份认证、分页筛选和部署。
@@ -35,6 +35,7 @@ PROCESSING → RESOLVED → CLOSED
 - 管理员为 `CREATED` 工单分配维修人员。
 - 维修人员查询自己被分配的工单列表。
 - 当前维修人员将自己的工单从 `ASSIGNED` 改为 `PROCESSING`。
+- 当前维修人员提交必填维修结果，将自己的工单从 `PROCESSING` 改为 `RESOLVED`。
 - 管理员和维修人员的基础角色校验。
 - 工单创建人和当前维修人员的数据范围隔离。
 - 请求参数校验和字段级错误响应。
@@ -42,7 +43,8 @@ PROCESSING → RESOLVED → CLOSED
 - 创建工单与写入创建日志的事务一致性。
 - 分配工单与写入分配日志的事务一致性。
 - 开始处理与写入处理日志的事务一致性。
-- 基于条件更新的重复分配、越权处理和并发状态保护。
+- 维修完成与写入结果日志的事务一致性。
+- 基于条件更新的重复分配、越权处理、重复解决和并发状态保护。
 - Controller MockMvc 切片测试。
 - Service 真实数据库集成测试。
 - 事务失败回滚测试。
@@ -50,7 +52,6 @@ PROCESSING → RESOLVED → CLOSED
 
 尚未实现：
 
-- 维修人员标记工单已经解决。
 - 报修人确认工单关闭。
 - 管理员查看全部工单。
 - Spring Security、JWT 和正式登录认证。
@@ -80,13 +81,13 @@ CLOSED
 | `CREATED` | 报修人已经创建工单，等待管理员分配 | 已实现 |
 | `ASSIGNED` | 管理员已经分配维修人员 | 已实现 |
 | `PROCESSING` | 维修人员正在处理 | 已实现 |
-| `RESOLVED` | 维修完成，等待报修人确认 | 尚未实现状态更新接口 |
+| `RESOLVED` | 维修完成，等待报修人确认 | 已实现 |
 | `CLOSED` | 报修人确认问题解决，工单关闭 | 尚未实现状态更新接口 |
 
 当前真正实现的业务状态变化为：
 
 ```text
-CREATED → ASSIGNED → PROCESSING
+CREATED → ASSIGNED → PROCESSING → RESOLVED
 ```
 
 `seed.sql` 中包含五种状态的演示数据，用于数据库查询和展示验证，但演示数据不代表所有状态变化接口都已经实现。
@@ -97,6 +98,8 @@ CREATED → ASSIGNED → PROCESSING
 - 只有被分配的维修人员才能开始处理工单。
 - `CREATED` 工单不能直接变为 `PROCESSING`。
 - 已经处于 `PROCESSING` 状态的工单不能重复开始处理。
+- 只有当前处理人才能把 `PROCESSING` 工单标记为 `RESOLVED`。
+- 已经处于 `RESOLVED` 状态的工单不能重复提交维修结果。
 - 客户端不能任意提交新的工单状态。
 - 状态变化必须由对应的 Service 业务方法执行。
 
@@ -107,7 +110,7 @@ CREATED → ASSIGNED → PROCESSING
 | 角色 | 计划支持的功能 | 当前实现情况 |
 |---|---|---|
 | `REQUESTER` | 创建工单、查看自己的工单、确认关闭 | 已实现创建和个人列表查询 |
-| `WORKER` | 查看被分配的工单、开始处理、标记已解决 | 已实现列表查询和开始处理 |
+| `WORKER` | 查看被分配的工单、开始处理、标记已解决 | 已实现 |
 | `ADMIN` | 查看全部工单、分配维修人员 | 已实现分配维修人员，全部工单查询尚未实现 |
 
 当前没有实现 Spring Security、JWT 或正式登录功能。
@@ -554,7 +557,7 @@ http://localhost:8080
 
 ## API 接口
 
-当前共实现六个接口：
+当前共实现七个接口：
 
 | 方法 | URL | 功能 |
 |---|---|---|
@@ -564,6 +567,7 @@ http://localhost:8080
 | `PATCH` | `/tickets/{id}/assignment` | 管理员分配维修人员 |
 | `GET` | `/tickets/assigned-to-me` | 维修人员查询被分配的工单 |
 | `PATCH` | `/tickets/{id}/processing` | 当前维修人员开始处理工单 |
+| `PATCH` | `/tickets/{id}/resolution` | 当前维修人员提交维修结果并标记已解决 |
 
 ---
 
@@ -986,6 +990,82 @@ WHERE id = #{ticketId}
 
 ---
 
+## 7. 维修人员提交维修结果
+
+### 请求
+
+```http
+PATCH /tickets/{id}/resolution
+X-User-Id: 3
+Content-Type: application/json
+```
+
+请求体：
+
+```json
+{
+  "resolutionNote": "Replaced damaged cable and restored network connection."
+}
+```
+
+`resolutionNote` 不能为空，最长 500 个字符。维修结果写入本次
+`PROCESSING → RESOLVED` 状态日志的 `note`，不会重复写入 `ticket` 表。
+
+PowerShell 示例：
+
+```powershell
+$body = @{
+  resolutionNote = "Replaced damaged cable and restored network connection."
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Patch `
+  -Uri "http://localhost:8080/tickets/13/resolution" `
+  -Headers @{"X-User-Id" = "3"} `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+### 成功响应
+
+成功时返回 `200 OK`，响应中的 `status` 为 `RESOLVED`，`assigneeId`
+仍为当前维修人员。
+
+### 失败状态
+
+| HTTP 状态 | 含义 |
+|---|---|
+| `400 Bad Request` | `resolutionNote` 为空或长度超过 500 |
+| `403 Forbidden` | 当前用户不是 `WORKER`，或者工单不属于当前维修人员 |
+| `404 Not Found` | 工单不存在 |
+| `409 Conflict` | 工单当前状态不是 `PROCESSING`，或者条件更新因并发修改而失败 |
+
+### 数据归属和状态保护
+
+```sql
+UPDATE ticket
+SET status = 'RESOLVED'
+WHERE id = #{ticketId}
+  AND assignee_id = #{assigneeId}
+  AND status = 'PROCESSING'
+```
+
+条件更新必须影响 1 行。这样既保留了当前处理人的归属约束，也避免重复请求或
+并发请求写入多条 RESOLVED 日志。只有成功更新状态的请求才会把自己的
+`resolutionNote` 写入日志。
+
+### 真实 HTTP 验证
+
+当前已经使用工单 id=13 完成真实验证：
+
+1. 用户 3 请求 `PATCH /tickets/13/resolution`，返回 200。
+2. 响应和 `ticket` 表均显示 `assignee_id=3`、`status=RESOLVED`。
+3. `ticket_log` 只新增一条 `PROCESSING → RESOLVED` 日志，`operator_id=3`。
+4. 日志 `note` 保存了请求中的维修结果说明。
+5. 对同一工单重复请求返回 409，未增加第二条 RESOLVED 日志。
+
+---
+
 ## 创建工单事务
 
 创建一张工单需要执行两次数据库写入：
@@ -1079,6 +1159,24 @@ assignee_id = 原维修人员 ID
 
 ---
 
+## 维修人员提交维修结果事务
+
+维修人员提交维修结果时，需要在一个事务中完成：
+
+1. 查询当前用户角色并确认其为 `WORKER`。
+2. 查询目标工单并确认工单存在。
+3. 确认工单属于当前维修人员。
+4. 确认工单状态为 `PROCESSING`。
+5. 使用带 id、assigneeId 和旧状态的条件更新把状态改为 `RESOLVED`。
+6. 重新查询更新后的工单。
+7. 写入一条 `PROCESSING → RESOLVED` 状态日志，并保存维修结果说明。
+8. 返回更新后的完整工单。
+
+如果 RESOLVED 日志写入失败，状态更新必须回滚。回滚后工单仍为
+`PROCESSING`，assigneeId 不变，也不会留下不完整的 RESOLVED 日志。
+
+---
+
 ## MyBatis 参数绑定
 
 SQL 参数使用 MyBatis `#{}` 绑定：
@@ -1131,18 +1229,18 @@ updatedAt
 mvn test
 ```
 
-当前共有 30 条测试：
+当前共有 39 条测试：
 
-- 19 条 `TicketController` MockMvc 测试。
-- 7 条 Service 真实数据库集成测试。
-- 3 条事务失败回滚测试。
+- 24 条 `TicketController` MockMvc 测试。
+- 10 条 Service 真实数据库集成测试。
+- 4 条事务失败回滚测试。
 - 1 条 Spring 上下文启动测试。
 
 用户已经在本机执行全部测试并确认通过。
 
 ### Controller 测试
 
-当前共有 19 条 Controller MockMvc 测试：
+当前共有 24 条 Controller MockMvc 测试：
 
 1. 合法创建请求返回 `201`。
 2. 空标题返回 `400`。
@@ -1163,6 +1261,11 @@ mvn test
 17. 开始处理的工单不存在时返回 `404`。
 18. 无权限用户开始处理工单时返回 `403`。
 19. 工单状态不允许开始处理时返回 `409`。
+20. 维修人员成功提交维修结果时返回 `200` 和 `RESOLVED`。
+21. 维修结果为空时返回 `400`，并且不调用 Service。
+22. 维修完成的工单不存在时返回 `404`。
+23. 无权限用户提交维修结果时返回 `403`。
+24. 工单状态不允许维修完成时返回 `409`。
 
 Controller 测试使用模拟的 Service，不连接真实数据库，主要验证：
 
@@ -1175,7 +1278,7 @@ Controller 测试使用模拟的 Service，不连接真实数据库，主要验�
 
 ### Service 集成测试
 
-Service 集成测试连接真实 MySQL，当前共有 7 条测试：
+Service 集成测试连接真实 MySQL，当前共有 10 条测试：
 
 1. 创建工单时同时插入工单和创建日志，并正确回填数据库生成的主键。
 2. 管理员分配后，工单状态变为 `ASSIGNED`、`assignee_id` 正确保存，并写入分配日志。
@@ -1184,14 +1287,18 @@ Service 集成测试连接真实 MySQL，当前共有 7 条测试：
 5. 当前维修人员开始处理工单后，状态变为 `PROCESSING`，assigneeId 不变，并写入一条处理日志。
 6. 另一个 `WORKER` 尝试处理不属于自己的工单时返回 403，状态和日志均不变化。
 7. 尝试处理 `CREATED` 或已经处于 `PROCESSING` 状态的工单时返回 409，并且不会新增处理日志。
+8. 当前维修人员提交维修结果后，状态变为 `RESOLVED`、assigneeId 不变，结果说明写入状态日志。
+9. 另一个 `WORKER` 尝试解决不属于自己的工单时返回 403，状态和日志均不变化。
+10. 尝试解决非 `PROCESSING` 工单时返回 409，并且不会新增 RESOLVED 日志。
 
 ### 事务回滚测试
 
-当前共有 3 条事务回滚测试：
+当前共有 4 条事务回滚测试：
 
 1. 创建日志写入失败时，已经插入的工单整体回滚。
 2. 分配日志写入失败时，工单状态和维修人员字段整体回滚。
 3. PROCESSING 日志写入失败时，工单状态从 `PROCESSING` 回滚为 `ASSIGNED`，维修人员 ID 保持不变。
+4. RESOLVED 日志写入失败时，工单状态从 `RESOLVED` 回滚为 `PROCESSING`，维修人员 ID 保持不变。
 
 ### 测试分层
 
@@ -1243,11 +1350,16 @@ Controller 测试、Service 集成测试、回滚测试和真实 HTTP 请求关�
 - [x] 完成 processing 接口 Controller MockMvc 测试
 - [x] 完成其他 WORKER 越权处理测试
 - [x] 完成非法状态处理测试
-- [x] 完成 19 条 Controller MockMvc 测试
-- [x] 完成 7 条 Service 真实数据库集成测试
-- [x] 完成 3 条事务失败回滚测试
+- [x] 实现 `PATCH /tickets/{id}/resolution`
+- [x] 实现 `PROCESSING → RESOLVED`
+- [x] 实现必填维修结果说明及长度校验
+- [x] 实现维修完成的条件更新与状态日志
+- [x] 实现维修完成事务及失败回滚
+- [x] 完成 resolution 接口真实 HTTP 与数据库验证
+- [x] 完成 24 条 Controller MockMvc 测试
+- [x] 完成 10 条 Service 真实数据库集成测试
+- [x] 完成 4 条事务失败回滚测试
 - [ ] 实现管理员查看全部工单
-- [ ] 实现 `PROCESSING → RESOLVED`
 - [ ] 实现 `RESOLVED → CLOSED`
 - [ ] 实现正式登录和权限认证
 - [ ] 增加分页和筛选
@@ -1263,9 +1375,8 @@ Controller 测试、Service 集成测试、回滚测试和真实 HTTP 请求关�
 - 创建工单接口还没有校验请求人是否为 `REQUESTER`。
 - 工单详情接口尚未进行归属和角色权限校验。
 - 尚未实现管理员查看全部工单。
-- 维修人员已经可以开始处理工单，但尚未实现标记维修完成。
 - 报修人尚未实现确认关闭。
-- 状态流目前实现到 `CREATED → ASSIGNED → PROCESSING`。
+- 状态流目前实现到 `CREATED → ASSIGNED → PROCESSING → RESOLVED`。
 - 列表接口没有分页、筛选和数量限制。
 - 状态更新使用条件更新进行基础并发保护，但尚未实现版本号或完整的乐观锁机制。
 - 尚未实现统一的业务错误码。
@@ -1306,16 +1417,15 @@ Controller 测试、Service 集成测试、回滚测试和真实 HTTP 请求关�
 
 后续按照以下顺序继续开发：
 
-1. 实现维修人员将工单从 `PROCESSING` 改为 `RESOLVED`。
-2. 实现报修人将工单从 `RESOLVED` 改为 `CLOSED`。
-3. 为每次状态变化增加条件更新、状态日志和事务回滚测试。
-4. 实现管理员查看全部工单。
-5. 修复工单详情接口的越权查询问题。
-6. 接入 Spring Security 和正式登录认证。
-7. 增加分页、状态筛选、分类筛选和优先级筛选。
-8. 增加统一业务错误码。
-9. 完成项目部署。
-10. 整理项目演示、简历描述和面试问答。
+1. 实现报修人将工单从 `RESOLVED` 改为 `CLOSED`。
+2. 为关闭动作增加条件更新、状态日志和事务回滚测试。
+3. 实现管理员查看全部工单。
+4. 修复工单详情接口的越权查询问题。
+5. 接入 Spring Security 和正式登录认证。
+6. 增加分页、状态筛选、分类筛选和优先级筛选。
+7. 增加统一业务错误码。
+8. 完成项目部署。
+9. 整理项目演示、简历描述和面试问答。
 
 ---
 

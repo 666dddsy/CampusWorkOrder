@@ -5,6 +5,7 @@ import com.example.campusworkorder.domain.enums.TicketPriority;
 import com.example.campusworkorder.domain.enums.TicketStatus;
 import com.example.campusworkorder.dto.TicketAssignRequest;
 import com.example.campusworkorder.dto.TicketCreateRequest;
+import com.example.campusworkorder.dto.TicketResolveRequest;
 import com.example.campusworkorder.entity.Ticket;
 import com.example.campusworkorder.entity.TicketLog;
 import com.example.campusworkorder.mapper.TicketLogMapper;
@@ -327,6 +328,142 @@ public class TicketServiceRollbackIntegrationTest {
                     WHERE ticket_id = ?
                       AND from_status = 'ASSIGNED'
                       AND to_status = 'PROCESSING'
+                    """,
+                    Long.class,
+                    ticketId
+            );
+
+            assertEquals(0L, logCount);
+        }finally {
+            if (ticketId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM ticket_log WHERE ticket_id = ?",
+                        ticketId
+                );
+
+                jdbcTemplate.update(
+                        "DELETE FROM ticket WHERE id = ?",
+                        ticketId
+                );
+            }
+
+            if (workerId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id = ?",
+                        workerId
+                );
+            }
+
+            if (requesterId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id = ?",
+                        requesterId
+                );
+            }
+        }
+    }
+    @Test
+    void resolveTicket_shouldRollbackWhenLogInsertFails(){
+        String suffix = String.valueOf(System.nanoTime());
+
+        String requesterUsername = "assign_requester_" + suffix;
+        String workerUsername = "assign_worker_" + suffix;
+        String ticketTitle = "assign_ticket_" + suffix;
+
+        Long requesterId = null;
+        Long workerId = null;
+        Long ticketId = null;
+
+        try {
+            // TODO 1：分别向 app_user 插入 REQUESTER、ADMIN、WORKER
+            jdbcTemplate.update(
+                    """
+                        insert into app_user (username,password_hash,role)
+                        values(?,?,?)
+                        """,
+                    requesterUsername,"test_hash", "REQUESTER"
+            );
+            jdbcTemplate.update(
+                    """
+                        insert into app_user (username,password_hash,role)
+                        values(?,?,?)
+                        """,
+                    workerUsername,"test_hash", "WORKER"
+            );
+            // TODO 2：根据两个 username 查询三个 id
+            requesterId=jdbcTemplate.queryForObject(
+                    """
+                            select id from app_user where username=?
+                            """,
+                    Long.class,
+                    requesterUsername
+            );
+
+            workerId=jdbcTemplate.queryForObject(
+                    """
+                            select id from app_user where username=?
+                            """,
+                    Long.class,
+                    workerUsername
+            );
+            // TODO 3：直接插入一张工单
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO ticket
+                    (
+                        creator_id,
+                        assignee_id,
+                        title,
+                        description,
+                        location,
+                        category,
+                        priority,
+                        status
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    requesterId,
+                    workerId,
+                    ticketTitle,
+                    "验证管理员分配工单",
+                    "测试地点",
+                    "NETWORK",
+                    "HIGH",
+                    "PROCESSING"
+            );
+            // TODO 4：根据 creator_id 和 title 查询 ticketId
+            ticketId=jdbcTemplate.queryForObject(
+                    """
+                            select id from ticket where creator_id=? and title=?
+                            """,
+                    Long.class,
+                    requesterId,
+                    ticketTitle
+            );
+            when(ticketLogMapper.insert(any(TicketLog.class)))
+                    .thenThrow(new RuntimeException("123456"));
+
+            Long finalTicketId = ticketId;
+            Long finalWorkerId = workerId;
+            TicketResolveRequest ticketResolveRequest=new TicketResolveRequest();
+            ticketResolveRequest.setResolutionNote("测试，因回滚消失");
+            RuntimeException exception = assertThrows(
+                    RuntimeException.class,
+                    () -> ticketService.resolveTicket(finalTicketId, finalWorkerId,ticketResolveRequest)
+            );
+
+            assertEquals("123456", exception.getMessage());
+            Ticket ticket=ticketService.selectById(ticketId);
+            assertNotNull(ticket);
+            assertEquals(workerId,ticket.getAssigneeId());
+            assertEquals(TicketStatus.PROCESSING, ticket.getStatus());
+            Long logCount = jdbcTemplate.queryForObject(
+                    """
+                    SELECT COUNT(*)
+                    FROM ticket_log
+                    WHERE ticket_id = ?
+                      AND from_status = 'PROCESSING'
+                      AND to_status = 'RESOLVED'
                     """,
                     Long.class,
                     ticketId

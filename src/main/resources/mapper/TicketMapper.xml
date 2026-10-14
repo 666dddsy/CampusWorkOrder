@@ -104,4 +104,11 @@
         AND status = 'ASSIGNED'
     </update>
 
+    <update id="updateResolveIfProcessing">
+        update ticket set status='RESOLVED'
+        WHERE id = #{ticketId}
+        AND assignee_id = #{assigneeId}
+        AND status = 'PROCESSING'
+    </update>
+
 </mapper>

@@ -5,6 +5,7 @@ import com.example.campusworkorder.domain.enums.TicketPriority;
 import com.example.campusworkorder.domain.enums.TicketStatus;
 import com.example.campusworkorder.dto.TicketAssignRequest;
 import com.example.campusworkorder.dto.TicketCreateRequest;
+import com.example.campusworkorder.dto.TicketResolveRequest;
 import com.example.campusworkorder.entity.Ticket;
 import com.example.campusworkorder.exception.BusinessException;
 import com.example.campusworkorder.service.TicketService;
@@ -375,5 +376,87 @@ public class TicketControllerTest {
                 .andExpect(jsonPath("$.message")
                         .value("The status of ticket isn't assigned"));
         verify(ticketService).startProcessing(101L, 3L);
+    }
+    @Test
+    void resolveTicket_shouldReturn200()throws Exception{
+        Ticket ticket=exampleTicket();
+        ticket.setAssigneeId(3L);
+        ticket.setStatus(TicketStatus.RESOLVED);
+        when(ticketService.resolveTicket(eq(ticket.getId()),eq(3L),any(TicketResolveRequest.class)))
+                .thenReturn(ticket);
+        mockMvc.perform(patch("/tickets/101/resolution")
+                        .header("X-User-Id","3")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "resolutionNote":"测试"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(101))
+                .andExpect(jsonPath("$.creatorId").value(12))
+                .andExpect(jsonPath("$.assigneeId").value(3))
+                .andExpect(jsonPath("$.status").value("RESOLVED"));
+        verify(ticketService).resolveTicket(eq(101L), eq(3L),any(TicketResolveRequest.class));
+    }
+    @Test
+    void resolveTicket_withNullResolutionNote_shouldReturn400()throws Exception{
+        mockMvc.perform(patch("/tickets/101/resolution")
+                        .header("X-User-Id","3")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "resolutionNote":""
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(ticketService);
+    }
+    @Test
+    void resolveTicket_shouldReturn404()throws Exception{
+        when(ticketService.resolveTicket(eq(101L),eq(3L),any(TicketResolveRequest.class)))
+                .thenReturn(null);
+        mockMvc.perform(patch("/tickets/101/resolution")
+                        .header("X-User-Id","3")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "resolutionNote":"测试"
+                                }
+                                """))
+                .andExpect(status().isNotFound());
+        verify(ticketService).resolveTicket(eq(101L), eq(3L),any(TicketResolveRequest.class));
+    }
+    @Test
+    void resolveTicket_shouldReturn403()throws Exception{
+        when(ticketService.resolveTicket(eq(101L),eq(5L),any(TicketResolveRequest.class)))
+                .thenThrow(new BusinessException(HttpStatus.FORBIDDEN,"You don't have the right to resolve this ticket."));
+        mockMvc.perform(patch("/tickets/101/resolution")
+                        .header("X-User-Id","5")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "resolutionNote":"测试"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You don't have the right to resolve this ticket."));
+        verify(ticketService).resolveTicket(eq(101L), eq(5L),any(TicketResolveRequest.class));
+    }
+    @Test
+    void resolveTicket_shouldReturn409()throws Exception{
+        when(ticketService.resolveTicket(eq(101L),eq(3L),any(TicketResolveRequest.class)))
+                .thenThrow(new BusinessException(HttpStatus.CONFLICT,"The ticket didn't start processing or has been resolved"));
+        mockMvc.perform(patch("/tickets/101/resolution")
+                        .header("X-User-Id","3")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "resolutionNote":"测试"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("The ticket didn't start processing or has been resolved"));
+        verify(ticketService).resolveTicket(eq(101L), eq(3L),any(TicketResolveRequest.class));
     }
 }
