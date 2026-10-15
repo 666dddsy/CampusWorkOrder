@@ -459,4 +459,67 @@ public class TicketControllerTest {
                 .andExpect(jsonPath("$.message").value("The ticket didn't start processing or has been resolved"));
         verify(ticketService).resolveTicket(eq(101L), eq(3L),any(TicketResolveRequest.class));
     }
+    @Test
+    void closeTicket_shouldReturn200() throws Exception {
+        Ticket ticket = exampleTicket();
+        ticket.setCreatorId(12L);
+        ticket.setAssigneeId(3L);
+        ticket.setStatus(TicketStatus.CLOSED);
+
+        when(ticketService.closeTicket(101L,12L))
+                .thenReturn(ticket);
+
+        mockMvc.perform(patch("/tickets/101/closure")
+                        .header("X-User-Id","12"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(101))
+                .andExpect(jsonPath("$.creatorId").value(12))
+                .andExpect(jsonPath("$.assigneeId").value(3))
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+
+        verify(ticketService).closeTicket(101L,12L);
+    }
+    @Test
+    void closeTicket_shouldReturn404() throws Exception {
+        when(ticketService.closeTicket(101L,12L))
+                .thenReturn(null);
+
+        mockMvc.perform(patch("/tickets/101/closure")
+                        .header("X-User-Id","12"))
+                .andExpect(status().isNotFound());
+
+        verify(ticketService).closeTicket(101L,12L);
+    }
+    @Test
+    void closeTicket_shouldReturn403() throws Exception {
+        when(ticketService.closeTicket(101L,5L))
+                .thenThrow(new BusinessException(
+                        HttpStatus.FORBIDDEN,
+                        "You don't have the right to close this ticket."
+                ));
+
+        mockMvc.perform(patch("/tickets/101/closure")
+                        .header("X-User-Id","5"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value("You don't have the right to close this ticket."));
+
+        verify(ticketService).closeTicket(101L,5L);
+    }
+    @Test
+    void closeTicket_shouldReturn409() throws Exception {
+        when(ticketService.closeTicket(101L,12L))
+                .thenThrow(new BusinessException(
+                        HttpStatus.CONFLICT,
+                        "The ticket is not resolved or has already been closed."
+                ));
+
+        mockMvc.perform(patch("/tickets/101/closure")
+                        .header("X-User-Id","12"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message")
+                        .value("The ticket is not resolved or has already been closed."));
+
+        verify(ticketService).closeTicket(101L,12L);
+    }
 }

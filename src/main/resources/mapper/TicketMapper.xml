@@ -111,4 +111,11 @@
         AND status = 'PROCESSING'
     </update>
 
+    <update id="updateCloseIfResolved">
+        update ticket set status='CLOSED'
+        WHERE id = #{ticketId}
+        AND creator_id = #{creatorId}
+        AND status = 'RESOLVED'
+    </update>
+
 </mapper>

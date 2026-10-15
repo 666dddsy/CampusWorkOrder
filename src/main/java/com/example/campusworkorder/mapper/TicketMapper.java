@@ -16,4 +16,5 @@ public interface TicketMapper {
     int updateAssignmentIfCreated(@Param("ticketId") Long ticketId,@Param("assigneeId")Long assigneeId);
     int updateProcessIfAssigned(@Param("ticketId")Long ticketId,@Param("assigneeId") Long assigneeId);
     int updateResolveIfProcessing(@Param("ticketId")Long ticketId,@Param("assigneeId") Long assigneeId);
+    int updateCloseIfResolved(@Param("ticketId")Long ticketId,@Param("creatorId")Long creatorId);
 }

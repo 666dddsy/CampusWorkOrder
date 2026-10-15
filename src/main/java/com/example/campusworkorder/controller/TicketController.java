@@ -111,6 +111,19 @@ public class TicketController {
         return  ResponseEntity.ok(ticketResponse);
     }
 
+    @PatchMapping("/{id}/closure")
+    public ResponseEntity<TicketResponse> closeTicket(
+            @RequestHeader("X-User-Id") Long creatorId,
+            @PathVariable Long id
+    ){
+        Ticket ticket=ticketService.closeTicket(id,creatorId);
+        if(ticket==null)
+            return ResponseEntity.notFound()
+                    .build();
+        TicketResponse ticketResponse=toTicketResponse(ticket);
+        return  ResponseEntity.ok(ticketResponse);
+    }
+
     private TicketResponse toTicketResponse(Ticket ticket){
         TicketResponse ticketResponse=new TicketResponse();
         ticketResponse.setAssigneeId(ticket.getAssigneeId());

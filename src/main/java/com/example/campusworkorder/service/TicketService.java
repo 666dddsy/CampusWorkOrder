@@ -113,7 +113,29 @@ public class TicketService {
         if(rows!=1)
             throw new BusinessException(HttpStatus.CONFLICT,"The ticket has been resolved");
         ticket=ticketMapper.selectById(ticketId);
-        TicketLog ticketLog=toticketLogResolved(userId,ticket,ticketResolveRequest.getResolutionNote());
+        TicketLog ticketLog=toTicketLogResolved(userId,ticket,ticketResolveRequest.getResolutionNote());
+        int logRows=ticketLogMapper.insert(ticketLog);
+        if(logRows!=1)
+            throw new IllegalStateException("failed to insert ticket log");
+        return ticket;
+    }
+    @Transactional
+    public Ticket closeTicket(Long ticketId,Long userId){
+        Ticket ticket=ticketMapper.selectById(ticketId);
+        UserRole role=appUserMapper.selectRoleById(userId);
+        if(role!=UserRole.REQUESTER)
+            throw new BusinessException(HttpStatus.FORBIDDEN,"You don't have the right to close this ticket.");
+        if(ticket==null)
+            return null;
+        if(!userId.equals(ticket.getCreatorId()))
+            throw new BusinessException(HttpStatus.FORBIDDEN,"You don't have the right to close this ticket.");
+        if(ticket.getStatus()!=TicketStatus.RESOLVED)
+            throw new BusinessException(HttpStatus.CONFLICT,"The ticket is not resolved or has already been closed.");
+        int rows=ticketMapper.updateCloseIfResolved(ticketId,userId);
+        if(rows!=1)
+            throw new BusinessException(HttpStatus.CONFLICT,"Ticket status has changed.");
+        ticket=ticketMapper.selectById(ticketId);
+        TicketLog ticketLog=toTicketLogClosed(userId,ticket);
         int logRows=ticketLogMapper.insert(ticketLog);
         if(logRows!=1)
             throw new IllegalStateException("failed to insert ticket log");
@@ -184,13 +206,23 @@ public class TicketService {
         return ticketLog;
     }
 
-    private TicketLog toticketLogResolved(Long operatorId,Ticket ticket,String note){
+    private TicketLog toTicketLogResolved(Long operatorId,Ticket ticket,String note){
         TicketLog ticketLog=new TicketLog();
         ticketLog.setTicketId(ticket.getId());
         ticketLog.setFromStatus(TicketStatus.PROCESSING);
         ticketLog.setToStatus(TicketStatus.RESOLVED);
         ticketLog.setOperatorId(operatorId);
         ticketLog.setNote(note);
+        return ticketLog;
+    }
+
+    private TicketLog toTicketLogClosed(Long operatorId,Ticket ticket){
+        TicketLog ticketLog=new TicketLog();
+        ticketLog.setTicketId(ticket.getId());
+        ticketLog.setFromStatus(TicketStatus.RESOLVED);
+        ticketLog.setToStatus(TicketStatus.CLOSED);
+        ticketLog.setOperatorId(operatorId);
+        ticketLog.setNote("报修人确认问题已解决并关闭工单");
         return ticketLog;
     }
 }

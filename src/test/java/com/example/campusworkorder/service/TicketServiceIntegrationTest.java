@@ -120,7 +120,6 @@ public class TicketServiceIntegrationTest {
         Long ticketId = null;
 
         try {
-            // TODO 1：分别向 app_user 插入 REQUESTER、ADMIN、WORKER
             jdbcTemplate.update(
                     """
                         insert into app_user (username,password_hash,role)
@@ -142,7 +141,6 @@ public class TicketServiceIntegrationTest {
                         """,
                     workerUsername,"test_hash", "WORKER"
             );
-            // TODO 2：根据三个 username 查询三个 id
             requesterId=jdbcTemplate.queryForObject(
                     """
                             select id from app_user where username=?
@@ -164,7 +162,6 @@ public class TicketServiceIntegrationTest {
                     Long.class,
                     workerUsername
             );
-            // TODO 3：直接插入一张 CREATED、assignee_id 为 null 的工单
             jdbcTemplate.update(
                     """
                     INSERT INTO ticket
@@ -188,7 +185,6 @@ public class TicketServiceIntegrationTest {
                     "HIGH",
                     "CREATED"
             );
-            // TODO 4：根据 creator_id 和 title 查询 ticketId
             ticketId=jdbcTemplate.queryForObject(
                     """
                             select id from ticket where creator_id=? and title=?
@@ -262,7 +258,6 @@ public class TicketServiceIntegrationTest {
         Long ticketId = null;
 
         try {
-            // TODO 1：分别向 app_user 插入 REQUESTER、ADMIN、WORKER
             jdbcTemplate.update(
                     """
                         insert into app_user (username,password_hash,role)
@@ -284,7 +279,6 @@ public class TicketServiceIntegrationTest {
                         """,
                     workerUsername,"test_hash", "WORKER"
             );
-            // TODO 2：根据三个 username 查询三个 id
             requesterId=jdbcTemplate.queryForObject(
                     """
                             select id from app_user where username=?
@@ -306,7 +300,6 @@ public class TicketServiceIntegrationTest {
                     Long.class,
                     workerUsername
             );
-            // TODO 3：直接插入一张 CREATED、assignee_id 为 null 的工单
             jdbcTemplate.update(
                     """
                     INSERT INTO ticket
@@ -330,7 +323,6 @@ public class TicketServiceIntegrationTest {
                     "HIGH",
                     "CREATED"
             );
-            // TODO 4：根据 creator_id 和 title 查询 ticketId
             ticketId=jdbcTemplate.queryForObject(
                     """
                             select id from ticket where creator_id=? and title=?
@@ -590,7 +582,6 @@ public class TicketServiceIntegrationTest {
         Long ticketId = null;
 
         try {
-            // TODO 1：分别向 app_user 插入 REQUESTER、ADMIN、WORKER
             jdbcTemplate.update(
                     """
                         insert into app_user (username,password_hash,role)
@@ -605,7 +596,6 @@ public class TicketServiceIntegrationTest {
                         """,
                     workerUsername,"test_hash", "WORKER"
             );
-            // TODO 2：根据两个 username 查询三个 id
             requesterId=jdbcTemplate.queryForObject(
                     """
                             select id from app_user where username=?
@@ -621,7 +611,6 @@ public class TicketServiceIntegrationTest {
                     Long.class,
                     workerUsername
             );
-            // TODO 3：直接插入一张工单
             jdbcTemplate.update(
                     """
                     INSERT INTO ticket
@@ -646,7 +635,6 @@ public class TicketServiceIntegrationTest {
                     "HIGH",
                     "ASSIGNED"
             );
-            // TODO 4：根据 creator_id 和 title 查询 ticketId
             ticketId=jdbcTemplate.queryForObject(
                     """
                             select id from ticket where creator_id=? and title=?
@@ -735,7 +723,6 @@ public class TicketServiceIntegrationTest {
         Long ticketId = null;
 
         try {
-            // TODO 1：分别向 app_user 插入 REQUESTER、WORKER、OTHER WORKER
             jdbcTemplate.update(
                     """
                         insert into app_user (username,password_hash,role)
@@ -757,7 +744,6 @@ public class TicketServiceIntegrationTest {
                         """,
                     otherWorkerUsername,"test_hash", "WORKER"
             );
-            // TODO 2：根据三个 username 查询三个 id
             requesterId=jdbcTemplate.queryForObject(
                     """
                             select id from app_user where username=?
@@ -780,7 +766,6 @@ public class TicketServiceIntegrationTest {
                     Long.class,
                     otherWorkerUsername
             );
-            // TODO 3：直接插入一张工单
             jdbcTemplate.update(
                     """
                     INSERT INTO ticket
@@ -805,7 +790,6 @@ public class TicketServiceIntegrationTest {
                     "HIGH",
                     "ASSIGNED"
             );
-            // TODO 4：根据 creator_id 和 title 查询 ticketId
             ticketId=jdbcTemplate.queryForObject(
                     """
                             select id from ticket where creator_id=? and title=?
@@ -887,7 +871,6 @@ public class TicketServiceIntegrationTest {
         Long ticketId2 = null;
 
         try {
-            // TODO 1：分别向 app_user 插入 REQUESTER、ADMIN、WORKER
             jdbcTemplate.update(
                     """
                         insert into app_user (username,password_hash,role)
@@ -902,7 +885,6 @@ public class TicketServiceIntegrationTest {
                         """,
                     workerUsername,"test_hash", "WORKER"
             );
-            // TODO 2：根据两个 username 查询三个 id
             requesterId=jdbcTemplate.queryForObject(
                     """
                             select id from app_user where username=?
@@ -918,7 +900,6 @@ public class TicketServiceIntegrationTest {
                     Long.class,
                     workerUsername
             );
-            // TODO 3：直接插入一张工单
             jdbcTemplate.update(
                     """
                     INSERT INTO ticket
@@ -966,7 +947,6 @@ public class TicketServiceIntegrationTest {
                     "HIGH",
                     "PROCESSING"
             );
-            // TODO 4：根据 creator_id 和 title 查询 ticketId
             ticketId1=jdbcTemplate.queryForObject(
                     """
                             select id from ticket where creator_id=? and title=?
@@ -1068,7 +1048,6 @@ public class TicketServiceIntegrationTest {
         Long ticketId = null;
 
         try {
-            // TODO 1：分别向 app_user 插入 REQUESTER、ADMIN、WORKER
             jdbcTemplate.update(
                     """
                         insert into app_user (username,password_hash,role)
@@ -1083,7 +1062,6 @@ public class TicketServiceIntegrationTest {
                         """,
                     workerUsername,"test_hash", "WORKER"
             );
-            // TODO 2：根据两个 username 查询三个 id
             requesterId=jdbcTemplate.queryForObject(
                     """
                             select id from app_user where username=?
@@ -1099,7 +1077,6 @@ public class TicketServiceIntegrationTest {
                     Long.class,
                     workerUsername
             );
-            // TODO 3：直接插入一张工单
             jdbcTemplate.update(
                     """
                     INSERT INTO ticket
@@ -1124,7 +1101,6 @@ public class TicketServiceIntegrationTest {
                     "HIGH",
                     "PROCESSING"
             );
-            // TODO 4：根据 creator_id 和 title 查询 ticketId
             ticketId=jdbcTemplate.queryForObject(
                     """
                             select id from ticket where creator_id=? and title=?
@@ -1219,7 +1195,6 @@ public class TicketServiceIntegrationTest {
         Long ticketId = null;
 
         try {
-            // TODO 1：分别向 app_user 插入 REQUESTER、WORKER、OTHER WORKER
             jdbcTemplate.update(
                     """
                         insert into app_user (username,password_hash,role)
@@ -1241,7 +1216,6 @@ public class TicketServiceIntegrationTest {
                         """,
                     otherWorkerUsername,"test_hash", "WORKER"
             );
-            // TODO 2：根据三个 username 查询三个 id
             requesterId=jdbcTemplate.queryForObject(
                     """
                             select id from app_user where username=?
@@ -1264,7 +1238,6 @@ public class TicketServiceIntegrationTest {
                     Long.class,
                     otherWorkerUsername
             );
-            // TODO 3：直接插入一张工单
             jdbcTemplate.update(
                     """
                     INSERT INTO ticket
@@ -1289,7 +1262,6 @@ public class TicketServiceIntegrationTest {
                     "HIGH",
                     "PROCESSING"
             );
-            // TODO 4：根据 creator_id 和 title 查询 ticketId
             ticketId=jdbcTemplate.queryForObject(
                     """
                             select id from ticket where creator_id=? and title=?
@@ -1375,7 +1347,6 @@ public class TicketServiceIntegrationTest {
         Long ticketId2 = null;
 
         try {
-            // TODO 1：分别向 app_user 插入 REQUESTER、ADMIN、WORKER
             jdbcTemplate.update(
                     """
                         insert into app_user (username,password_hash,role)
@@ -1390,7 +1361,6 @@ public class TicketServiceIntegrationTest {
                         """,
                     workerUsername,"test_hash", "WORKER"
             );
-            // TODO 2：根据两个 username 查询三个 id
             requesterId=jdbcTemplate.queryForObject(
                     """
                             select id from app_user where username=?
@@ -1406,7 +1376,6 @@ public class TicketServiceIntegrationTest {
                     Long.class,
                     workerUsername
             );
-            // TODO 3：直接插入一张工单
             jdbcTemplate.update(
                     """
                     INSERT INTO ticket
@@ -1455,7 +1424,6 @@ public class TicketServiceIntegrationTest {
                     "HIGH",
                     "RESOLVED"
             );
-            // TODO 4：根据 creator_id 和 title 查询 ticketId
             ticketId1=jdbcTemplate.queryForObject(
                     """
                             select id from ticket where creator_id=? and title=?
@@ -1546,5 +1514,800 @@ public class TicketServiceIntegrationTest {
             }
         }
     }
+    @Test
+    void closeTicket_shouldUpdateStatusAndInsertLog(){
+        String suffix = String.valueOf(System.nanoTime());
 
+        String requesterUsername = "close_requester_" + suffix;
+        String workerUsername = "close_worker_" + suffix;
+        String ticketTitle = "close_ticket_" + suffix;
+
+        Long requesterId = null;
+        Long workerId = null;
+        Long ticketId = null;
+
+        try {
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO app_user(username,password_hash,role)
+                    VALUES(?,?,?)
+                    """,
+                    requesterUsername,"test_hash","REQUESTER"
+            );
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO app_user(username,password_hash,role)
+                    VALUES(?,?,?)
+                    """,
+                    workerUsername,"test_hash","WORKER"
+            );
+
+            requesterId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM app_user WHERE username=?",
+                    Long.class,
+                    requesterUsername
+            );
+
+            workerId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM app_user WHERE username=?",
+                    Long.class,
+                    workerUsername
+            );
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO ticket(
+                        creator_id,
+                        assignee_id,
+                        title,
+                        description,
+                        location,
+                        category,
+                        priority,
+                        status
+                    )
+                    VALUES(?,?,?,?,?,?,?,?)
+                    """,
+                    requesterId,
+                    workerId,
+                    ticketTitle,
+                    "验证报修人关闭工单",
+                    "测试地点",
+                    "NETWORK",
+                    "HIGH",
+                    "RESOLVED"
+            );
+
+            ticketId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM ticket WHERE creator_id=? AND title=?",
+                    Long.class,
+                    requesterId,
+                    ticketTitle
+            );
+
+            Ticket result = ticketService.closeTicket(ticketId,requesterId);
+            Ticket savedTicket = ticketMapper.selectById(ticketId);
+
+            assertNotNull(result);
+            assertEquals(TicketStatus.CLOSED,result.getStatus());
+            assertEquals(requesterId,result.getCreatorId());
+            assertEquals(workerId,result.getAssigneeId());
+
+            assertNotNull(savedTicket);
+            assertEquals(TicketStatus.CLOSED,savedTicket.getStatus());
+            assertEquals(requesterId,savedTicket.getCreatorId());
+            assertEquals(workerId,savedTicket.getAssigneeId());
+
+            Long logCount = jdbcTemplate.queryForObject(
+                    """
+                    SELECT COUNT(*)
+                    FROM ticket_log
+                    WHERE ticket_id=?
+                      AND from_status='RESOLVED'
+                      AND to_status='CLOSED'
+                    """,
+                    Long.class,
+                    ticketId
+            );
+
+            Long operatorId = jdbcTemplate.queryForObject(
+                    """
+                    SELECT operator_id
+                    FROM ticket_log
+                    WHERE ticket_id=?
+                      AND to_status='CLOSED'
+                    """,
+                    Long.class,
+                    ticketId
+            );
+
+            String note = jdbcTemplate.queryForObject(
+                    """
+                    SELECT note
+                    FROM ticket_log
+                    WHERE ticket_id=?
+                      AND to_status='CLOSED'
+                    """,
+                    String.class,
+                    ticketId
+            );
+
+            assertEquals(1L,logCount);
+            assertEquals(requesterId,operatorId);
+            assertEquals("报修人确认问题已解决并关闭工单",note);
+
+        } finally {
+            if(ticketId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM ticket_log WHERE ticket_id=?",
+                        ticketId
+                );
+                jdbcTemplate.update(
+                        "DELETE FROM ticket WHERE id=?",
+                        ticketId
+                );
+            }
+
+            if(workerId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id=?",
+                        workerId
+                );
+            }
+
+            if(requesterId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id=?",
+                        requesterId
+                );
+            }
+        }
+    }
+    @Test
+    void closeTicket_withWrongRole_shouldReturn403(){
+        String suffix = String.valueOf(System.nanoTime());
+
+        String requesterUsername = "close_role_requester_" + suffix;
+        String workerUsername = "close_role_worker_" + suffix;
+        String adminUsername = "close_role_admin_" + suffix;
+        String ticketTitle = "close_role_ticket_" + suffix;
+
+        Long requesterId = null;
+        Long workerId = null;
+        Long adminId = null;
+        Long ticketId = null;
+
+        try {
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO app_user(username,password_hash,role)
+                    VALUES(?,?,?)
+                    """,
+                    requesterUsername,
+                    "test_hash",
+                    "REQUESTER"
+            );
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO app_user(username,password_hash,role)
+                    VALUES(?,?,?)
+                    """,
+                    workerUsername,
+                    "test_hash",
+                    "WORKER"
+            );
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO app_user(username,password_hash,role)
+                    VALUES(?,?,?)
+                    """,
+                    adminUsername,
+                    "test_hash",
+                    "ADMIN"
+            );
+
+            requesterId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM app_user WHERE username=?",
+                    Long.class,
+                    requesterUsername
+            );
+
+            workerId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM app_user WHERE username=?",
+                    Long.class,
+                    workerUsername
+            );
+
+            adminId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM app_user WHERE username=?",
+                    Long.class,
+                    adminUsername
+            );
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO ticket(
+                        creator_id,
+                        assignee_id,
+                        title,
+                        description,
+                        location,
+                        category,
+                        priority,
+                        status
+                    )
+                    VALUES(?,?,?,?,?,?,?,?)
+                    """,
+                    requesterId,
+                    workerId,
+                    ticketTitle,
+                    "验证 WORKER 和 ADMIN 不能关闭工单",
+                    "测试地点",
+                    "NETWORK",
+                    "HIGH",
+                    "RESOLVED"
+            );
+
+            ticketId = jdbcTemplate.queryForObject(
+                    """
+                    SELECT id
+                    FROM ticket
+                    WHERE creator_id=? AND title=?
+                    """,
+                    Long.class,
+                    requesterId,
+                    ticketTitle
+            );
+
+            Long finalTicketId = ticketId;
+            Long finalWorkerId = workerId;
+            Long finalAdminId = adminId;
+
+            BusinessException workerException = assertThrows(
+                    BusinessException.class,
+                    () -> ticketService.closeTicket(
+                            finalTicketId,
+                            finalWorkerId
+                    )
+            );
+
+            BusinessException adminException = assertThrows(
+                    BusinessException.class,
+                    () -> ticketService.closeTicket(
+                            finalTicketId,
+                            finalAdminId
+                    )
+            );
+
+            assertEquals(
+                    HttpStatus.FORBIDDEN,
+                    workerException.getStatus()
+            );
+            assertEquals(
+                    "You don't have the right to close this ticket.",
+                    workerException.getMessage()
+            );
+
+            assertEquals(
+                    HttpStatus.FORBIDDEN,
+                    adminException.getStatus()
+            );
+            assertEquals(
+                    "You don't have the right to close this ticket.",
+                    adminException.getMessage()
+            );
+
+            Ticket savedTicket = ticketService.selectById(ticketId);
+
+            assertNotNull(savedTicket);
+            assertEquals(
+                    TicketStatus.RESOLVED,
+                    savedTicket.getStatus()
+            );
+            assertEquals(
+                    requesterId,
+                    savedTicket.getCreatorId()
+            );
+            assertEquals(
+                    workerId,
+                    savedTicket.getAssigneeId()
+            );
+
+            Long closedLogCount = jdbcTemplate.queryForObject(
+                    """
+                    SELECT COUNT(*)
+                    FROM ticket_log
+                    WHERE ticket_id=?
+                      AND from_status='RESOLVED'
+                      AND to_status='CLOSED'
+                    """,
+                    Long.class,
+                    ticketId
+            );
+
+            assertEquals(0L, closedLogCount);
+        } finally {
+            if(ticketId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM ticket_log WHERE ticket_id=?",
+                        ticketId
+                );
+                jdbcTemplate.update(
+                        "DELETE FROM ticket WHERE id=?",
+                        ticketId
+                );
+            }
+
+            if(adminId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id=?",
+                        adminId
+                );
+            }
+
+            if(workerId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id=?",
+                        workerId
+                );
+            }
+
+            if(requesterId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id=?",
+                        requesterId
+                );
+            }
+        }
+    }
+    @Test
+    void closeTicket_withOtherRequester_shouldReturn403(){
+        String suffix = String.valueOf(System.nanoTime());
+
+        String requesterUsername = "close_owner_requester_" + suffix;
+        String otherRequesterUsername = "close_other_requester_" + suffix;
+        String workerUsername = "close_owner_worker_" + suffix;
+        String ticketTitle = "close_owner_ticket_" + suffix;
+
+        Long requesterId = null;
+        Long otherRequesterId = null;
+        Long workerId = null;
+        Long ticketId = null;
+
+        try {
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO app_user(username,password_hash,role)
+                    VALUES(?,?,?)
+                    """,
+                    requesterUsername,
+                    "test_hash",
+                    "REQUESTER"
+            );
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO app_user(username,password_hash,role)
+                    VALUES(?,?,?)
+                    """,
+                    otherRequesterUsername,
+                    "test_hash",
+                    "REQUESTER"
+            );
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO app_user(username,password_hash,role)
+                    VALUES(?,?,?)
+                    """,
+                    workerUsername,
+                    "test_hash",
+                    "WORKER"
+            );
+
+            requesterId = jdbcTemplate.queryForObject(
+                    """
+                    SELECT id
+                    FROM app_user
+                    WHERE username=?
+                    """,
+                    Long.class,
+                    requesterUsername
+            );
+
+            otherRequesterId = jdbcTemplate.queryForObject(
+                    """
+                    SELECT id
+                    FROM app_user
+                    WHERE username=?
+                    """,
+                    Long.class,
+                    otherRequesterUsername
+            );
+
+            workerId = jdbcTemplate.queryForObject(
+                    """
+                    SELECT id
+                    FROM app_user
+                    WHERE username=?
+                    """,
+                    Long.class,
+                    workerUsername
+            );
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO ticket(
+                        creator_id,
+                        assignee_id,
+                        title,
+                        description,
+                        location,
+                        category,
+                        priority,
+                        status
+                    )
+                    VALUES(?,?,?,?,?,?,?,?)
+                    """,
+                    requesterId,
+                    workerId,
+                    ticketTitle,
+                    "验证其他报修人不能关闭工单",
+                    "测试地点",
+                    "NETWORK",
+                    "HIGH",
+                    "RESOLVED"
+            );
+
+            ticketId = jdbcTemplate.queryForObject(
+                    """
+                    SELECT id
+                    FROM ticket
+                    WHERE creator_id=? AND title=?
+                    """,
+                    Long.class,
+                    requesterId,
+                    ticketTitle
+            );
+
+            Long finalTicketId = ticketId;
+            Long finalOtherRequesterId = otherRequesterId;
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> ticketService.closeTicket(
+                            finalTicketId,
+                            finalOtherRequesterId
+                    )
+            );
+
+            assertEquals(
+                    HttpStatus.FORBIDDEN,
+                    exception.getStatus()
+            );
+            assertEquals(
+                    "You don't have the right to close this ticket.",
+                    exception.getMessage()
+            );
+
+            Ticket savedTicket = ticketService.selectById(ticketId);
+
+            assertNotNull(savedTicket);
+            assertEquals(
+                    TicketStatus.RESOLVED,
+                    savedTicket.getStatus()
+            );
+            assertEquals(
+                    requesterId,
+                    savedTicket.getCreatorId()
+            );
+            assertEquals(
+                    workerId,
+                    savedTicket.getAssigneeId()
+            );
+
+            Long closedLogCount = jdbcTemplate.queryForObject(
+                    """
+                    SELECT COUNT(*)
+                    FROM ticket_log
+                    WHERE ticket_id=?
+                      AND from_status='RESOLVED'
+                      AND to_status='CLOSED'
+                    """,
+                    Long.class,
+                    ticketId
+            );
+
+            assertEquals(0L, closedLogCount);
+        } finally {
+            if(ticketId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM ticket_log WHERE ticket_id=?",
+                        ticketId
+                );
+
+                jdbcTemplate.update(
+                        "DELETE FROM ticket WHERE id=?",
+                        ticketId
+                );
+            }
+
+            if(workerId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id=?",
+                        workerId
+                );
+            }
+
+            if(otherRequesterId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id=?",
+                        otherRequesterId
+                );
+            }
+
+            if(requesterId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id=?",
+                        requesterId
+                );
+            }
+        }
+    }
+    @Test
+    void closeTicket_withNonResolvedTicket_shouldReturn409(){
+        String suffix = String.valueOf(System.nanoTime());
+
+        String requesterUsername = "close_status_requester_" + suffix;
+        String workerUsername = "close_status_worker_" + suffix;
+        String processingTicketTitle =
+                "close_processing_ticket_" + suffix;
+        String closedTicketTitle =
+                "close_closed_ticket_" + suffix;
+
+        Long requesterId = null;
+        Long workerId = null;
+        Long processingTicketId = null;
+        Long closedTicketId = null;
+
+        try {
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO app_user(username,password_hash,role)
+                    VALUES(?,?,?)
+                    """,
+                    requesterUsername,
+                    "test_hash",
+                    "REQUESTER"
+            );
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO app_user(username,password_hash,role)
+                    VALUES(?,?,?)
+                    """,
+                    workerUsername,
+                    "test_hash",
+                    "WORKER"
+            );
+
+            requesterId = jdbcTemplate.queryForObject(
+                    """
+                    SELECT id
+                    FROM app_user
+                    WHERE username=?
+                    """,
+                    Long.class,
+                    requesterUsername
+            );
+
+            workerId = jdbcTemplate.queryForObject(
+                    """
+                    SELECT id
+                    FROM app_user
+                    WHERE username=?
+                    """,
+                    Long.class,
+                    workerUsername
+            );
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO ticket(
+                        creator_id,
+                        assignee_id,
+                        title,
+                        description,
+                        location,
+                        category,
+                        priority,
+                        status
+                    )
+                    VALUES(?,?,?,?,?,?,?,?)
+                    """,
+                    requesterId,
+                    workerId,
+                    processingTicketTitle,
+                    "验证 PROCESSING 工单不能关闭",
+                    "测试地点",
+                    "NETWORK",
+                    "HIGH",
+                    "PROCESSING"
+            );
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO ticket(
+                        creator_id,
+                        assignee_id,
+                        title,
+                        description,
+                        location,
+                        category,
+                        priority,
+                        status
+                    )
+                    VALUES(?,?,?,?,?,?,?,?)
+                    """,
+                    requesterId,
+                    workerId,
+                    closedTicketTitle,
+                    "验证 CLOSED 工单不能重复关闭",
+                    "测试地点",
+                    "NETWORK",
+                    "HIGH",
+                    "CLOSED"
+            );
+
+            processingTicketId = jdbcTemplate.queryForObject(
+                    """
+                    SELECT id
+                    FROM ticket
+                    WHERE creator_id=? AND title=?
+                    """,
+                    Long.class,
+                    requesterId,
+                    processingTicketTitle
+            );
+
+            closedTicketId = jdbcTemplate.queryForObject(
+                    """
+                    SELECT id
+                    FROM ticket
+                    WHERE creator_id=? AND title=?
+                    """,
+                    Long.class,
+                    requesterId,
+                    closedTicketTitle
+            );
+
+            Long finalRequesterId = requesterId;
+            Long finalProcessingTicketId = processingTicketId;
+            Long finalClosedTicketId = closedTicketId;
+
+            BusinessException processingException = assertThrows(
+                    BusinessException.class,
+                    () -> ticketService.closeTicket(
+                            finalProcessingTicketId,
+                            finalRequesterId
+                    )
+            );
+
+            BusinessException closedException = assertThrows(
+                    BusinessException.class,
+                    () -> ticketService.closeTicket(
+                            finalClosedTicketId,
+                            finalRequesterId
+                    )
+            );
+
+            assertEquals(
+                    HttpStatus.CONFLICT,
+                    processingException.getStatus()
+            );
+            assertEquals(
+                    "The ticket is not resolved or has already been closed.",
+                    processingException.getMessage()
+            );
+
+            assertEquals(
+                    HttpStatus.CONFLICT,
+                    closedException.getStatus()
+            );
+            assertEquals(
+                    "The ticket is not resolved or has already been closed.",
+                    closedException.getMessage()
+            );
+
+            Ticket processingTicket =
+                    ticketService.selectById(processingTicketId);
+            Ticket closedTicket =
+                    ticketService.selectById(closedTicketId);
+
+            assertNotNull(processingTicket);
+            assertNotNull(closedTicket);
+
+            assertEquals(
+                    TicketStatus.PROCESSING,
+                    processingTicket.getStatus()
+            );
+            assertEquals(
+                    TicketStatus.CLOSED,
+                    closedTicket.getStatus()
+            );
+
+            assertEquals(
+                    requesterId,
+                    processingTicket.getCreatorId()
+            );
+            assertEquals(
+                    requesterId,
+                    closedTicket.getCreatorId()
+            );
+            assertEquals(
+                    workerId,
+                    processingTicket.getAssigneeId()
+            );
+            assertEquals(
+                    workerId,
+                    closedTicket.getAssigneeId()
+            );
+
+            Long closedLogCount = jdbcTemplate.queryForObject(
+                    """
+                    SELECT COUNT(*)
+                    FROM ticket_log
+                    WHERE ticket_id IN (?,?)
+                      AND from_status='RESOLVED'
+                      AND to_status='CLOSED'
+                    """,
+                    Long.class,
+                    processingTicketId,
+                    closedTicketId
+            );
+
+            assertEquals(0L, closedLogCount);
+        } finally {
+            if(processingTicketId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM ticket_log WHERE ticket_id=?",
+                        processingTicketId
+                );
+
+                jdbcTemplate.update(
+                        "DELETE FROM ticket WHERE id=?",
+                        processingTicketId
+                );
+            }
+
+            if(closedTicketId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM ticket_log WHERE ticket_id=?",
+                        closedTicketId
+                );
+
+                jdbcTemplate.update(
+                        "DELETE FROM ticket WHERE id=?",
+                        closedTicketId
+                );
+            }
+
+            if(workerId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id=?",
+                        workerId
+                );
+            }
+
+            if(requesterId != null){
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id=?",
+                        requesterId
+                );
+            }
+        }
+    }
 }
