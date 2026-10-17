@@ -2,9 +2,7 @@ package com.example.campusworkorder.service;
 
 import com.example.campusworkorder.domain.enums.TicketStatus;
 import com.example.campusworkorder.domain.enums.UserRole;
-import com.example.campusworkorder.dto.TicketAssignRequest;
-import com.example.campusworkorder.dto.TicketCreateRequest;
-import com.example.campusworkorder.dto.TicketResolveRequest;
+import com.example.campusworkorder.dto.*;
 import com.example.campusworkorder.entity.Ticket;
 import com.example.campusworkorder.entity.TicketLog;
 import com.example.campusworkorder.exception.BusinessException;
@@ -140,6 +138,23 @@ public class TicketService {
         if(logRows!=1)
             throw new IllegalStateException("failed to insert ticket log");
         return ticket;
+    }
+
+    public PageResult<Ticket> selectAdminTickets(Long userId, TicketPageQuery ticketPageQuery){
+        int page=ticketPageQuery.getPage();
+        int pageSize=ticketPageQuery.getPageSize();
+        UserRole role = appUserMapper.selectRoleById(userId);
+        if(role!=UserRole.ADMIN)
+            throw new BusinessException(HttpStatus.FORBIDDEN,"You are not ADMIN");
+        long offset = (page - 1L) * pageSize;
+        List<Ticket> tickets=ticketMapper.selectPage(offset,pageSize);
+        long count=ticketMapper.countAll();
+        PageResult<Ticket> pageResult=new PageResult<>();
+        pageResult.setItems(tickets);
+        pageResult.setPage(page);
+        pageResult.setPageSize(pageSize);
+        pageResult.setTotal(count);
+        return pageResult;
     }
 
     public Ticket selectById(Long ticketId){

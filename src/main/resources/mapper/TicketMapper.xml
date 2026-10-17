@@ -22,6 +22,11 @@
         WHERE id = #{id}
     </select>
 
+    <select id="countAll">
+        SELECT count(*)
+        FROM ticket
+    </select>
+
     <select id="selectByCreatorId"
             parameterType="long"
             resultType="com.example.campusworkorder.entity.Ticket">
@@ -58,6 +63,24 @@
         FROM ticket
         WHERE assignee_id = #{assigneeId}
         order by created_at DESC, id DESC
+    </select>
+
+    <select id="selectPage"
+            resultType="com.example.campusworkorder.entity.Ticket">
+        SELECT id,
+        creator_id,
+        assignee_id,
+        title,
+        description,
+        location,
+        category,
+        priority,
+        status,
+        created_at,
+        updated_at
+        FROM ticket
+        order by created_at DESC, id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
     </select>
 
     <insert id="insert"

@@ -1,9 +1,6 @@
 package com.example.campusworkorder.controller;
 
-import com.example.campusworkorder.dto.TicketAssignRequest;
-import com.example.campusworkorder.dto.TicketCreateRequest;
-import com.example.campusworkorder.dto.TicketResolveRequest;
-import com.example.campusworkorder.dto.TicketResponse;
+import com.example.campusworkorder.dto.*;
 import com.example.campusworkorder.entity.Ticket;
 import com.example.campusworkorder.service.TicketService;
 import jakarta.validation.Valid;
@@ -57,6 +54,25 @@ public class TicketController {
             ticketResponse.add(toTicketResponse(ticket));
         }
         return ResponseEntity.ok(ticketResponse);
+    }
+
+    @GetMapping("")
+    public PageResult<TicketResponse> selectAllByPage(
+            @RequestHeader("X-User-Id") Long adminId,
+            @Valid @ModelAttribute TicketPageQuery ticketPageQuery
+            ){
+        PageResult<Ticket> pageResults=ticketService.selectAdminTickets(adminId,ticketPageQuery);
+        List<TicketResponse> ticketResponse=new ArrayList<>();
+        PageResult<TicketResponse> pageResult=new PageResult<>();
+        for(Ticket ticket:pageResults.getItems())
+        {
+            ticketResponse.add(toTicketResponse(ticket));
+        }
+        pageResult.setItems(ticketResponse);
+        pageResult.setPage(pageResults.getPage());
+        pageResult.setPageSize(pageResults.getPageSize());
+        pageResult.setTotal(pageResults.getTotal());
+        return pageResult;
     }
 
     @PostMapping

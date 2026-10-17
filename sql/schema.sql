@@ -69,3 +69,4 @@ create table if not exists ticket_log(
 DESC ticket_log;
 
 explain select * from ticket where creator_id=1;
+

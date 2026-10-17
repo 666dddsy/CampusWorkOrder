@@ -3,9 +3,7 @@ package com.example.campusworkorder.controller;
 import com.example.campusworkorder.domain.enums.TicketCategory;
 import com.example.campusworkorder.domain.enums.TicketPriority;
 import com.example.campusworkorder.domain.enums.TicketStatus;
-import com.example.campusworkorder.dto.TicketAssignRequest;
-import com.example.campusworkorder.dto.TicketCreateRequest;
-import com.example.campusworkorder.dto.TicketResolveRequest;
+import com.example.campusworkorder.dto.*;
 import com.example.campusworkorder.entity.Ticket;
 import com.example.campusworkorder.exception.BusinessException;
 import com.example.campusworkorder.service.TicketService;
@@ -521,5 +519,134 @@ public class TicketControllerTest {
                         .value("The ticket is not resolved or has already been closed."));
 
         verify(ticketService).closeTicket(101L,12L);
+    }
+    @Test
+    void selectTicketByPage_withNonParameter() throws Exception{
+        Ticket ticket=exampleTicket();
+        Ticket ticket1=exampleTicket2();
+        List<Ticket> tickets=new ArrayList<>();
+        tickets.add(ticket);
+        tickets.add(ticket1);
+        PageResult<Ticket> pageResult=new PageResult<>();
+        pageResult.setItems(tickets);
+        pageResult.setTotal(2);
+        pageResult.setPage(1);
+        pageResult.setPageSize(10);
+        when(ticketService.selectAdminTickets(eq(4L),any(TicketPageQuery.class)))
+                .thenReturn(pageResult);
+        mockMvc.perform(get("/tickets")
+                .header("X-User-Id","4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.pageSize").value(10))
+                .andExpect(jsonPath("$.total").value(2));
+        verify(ticketService).selectAdminTickets(
+                eq(4L),
+                argThat(query ->
+                        query.getPage() == 1 &&
+                                query.getPageSize() == 10
+                )
+        );
+    }
+    @Test
+    void selectTicketByPage_withParameter() throws Exception{
+        Ticket ticket=exampleTicket();
+        Ticket ticket1=exampleTicket2();
+        List<Ticket> tickets=new ArrayList<>();
+        tickets.add(ticket);
+        tickets.add(ticket1);
+        PageResult<Ticket> pageResult=new PageResult<>();
+        pageResult.setItems(tickets);
+        pageResult.setTotal(2);
+        pageResult.setPage(2);
+        pageResult.setPageSize(2);
+        when(ticketService.selectAdminTickets(eq(4L),any(TicketPageQuery.class)))
+                .thenReturn(pageResult);
+        mockMvc.perform(get("/tickets")
+                        .header("X-User-Id","4")
+                        .param("page","2")
+                        .param("pageSize","2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.pageSize").value(2))
+                .andExpect(jsonPath("$.total").value(2));
+        verify(ticketService).selectAdminTickets(
+                eq(4L),
+                argThat(query ->
+                        query.getPage() == 2 &&
+                                query.getPageSize() == 2
+                )
+        );
+    }
+    @Test
+    void selectTicketByPage_shouldReturn400() throws Exception{
+        mockMvc.perform(get("/tickets")
+                        .header("X-User-Id", "4")
+                        .param("page", "0"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/tickets")
+                        .header("X-User-Id", "4")
+                        .param("pageSize", "101"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/tickets")
+                        .header("X-User-Id", "4")
+                        .param("pageSize", "0"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/tickets")
+                        .header("X-User-Id", "4")
+                        .param("page", "abc"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/tickets")
+                        .header("X-User-Id", "4")
+                        .param("page", "-1"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(ticketService);
+    }
+    @Test
+    void selectTicketByPage_shouldReturn403() throws Exception{
+        when(ticketService.selectAdminTickets(eq(2L),any(TicketPageQuery.class)))
+                .thenThrow(new BusinessException(HttpStatus.FORBIDDEN,"You are not ADMIN"));
+        mockMvc.perform(get("/tickets")
+                        .header("X-User-Id", "2")
+                        .param("page", "2")
+                        .param("pageSize", "2"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You are not ADMIN"));
+        verify(ticketService).selectAdminTickets(
+                eq(2L),
+                argThat(query ->
+                query.getPage() == 2 &&
+                        query.getPageSize() == 2
+        ));
+    }
+    @Test
+    void selectTicketByPage_withEmpty() throws Exception {
+        List<Ticket> tickets = new ArrayList<>();
+        PageResult<Ticket> pageResult = new PageResult<>();
+        pageResult.setItems(tickets);
+        pageResult.setTotal(5);
+        pageResult.setPage(99);
+        pageResult.setPageSize(2);
+        when(ticketService.selectAdminTickets(eq(4L), any(TicketPageQuery.class)))
+                .thenReturn(pageResult);
+        mockMvc.perform(get("/tickets")
+                        .header("X-User-Id", "4")
+                        .param("page", "99")
+                        .param("pageSize", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(0))
+                .andExpect(jsonPath("$.page").value(99))
+                .andExpect(jsonPath("$.pageSize").value(2))
+                .andExpect(jsonPath("$.total").value(5));
+        verify(ticketService).selectAdminTickets(
+                eq(4L),
+                argThat(query ->
+                        query.getPage() == 99 &&
+                                query.getPageSize() == 2
+                )
+        );
     }
 }

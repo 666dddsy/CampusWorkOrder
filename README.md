@@ -22,7 +22,7 @@ CampusWorkOrder 是一个基于 Spring Boot、MyBatis 和 MySQL 实现的校园�
 CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 ```
 
-后续将继续完善管理员查询、分页筛选、正式身份认证、接口文档和部署。
+管理员分页列表已经实现；后续将继续完善分页筛选、正式身份认证、接口文档和部署。
 
 ---
 
@@ -49,12 +49,12 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 - Service 真实数据库集成测试。
 - 事务失败回滚测试。
 - 真实 HTTP 请求和数据库结果验证。
+- 仅 `ADMIN` 可访问的管理员分页列表，支持默认参数、边界校验、稳定排序和真实 HTTP 验证。
 
 尚未实现：
 
-- 管理员查看全部工单。
 - Spring Security、JWT 和正式登录认证。
-- 列表分页和条件筛选。
+- 列表条件筛选。
 - 统一业务错误码。
 - OpenAPI/Swagger 接口文档。
 - 生产环境部署。
@@ -112,7 +112,7 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 |---|---|---|
 | `REQUESTER` | 创建工单、查看自己的工单、确认关闭 | 已实现 |
 | `WORKER` | 查看被分配的工单、开始处理、提交维修结果 | 已实现 |
-| `ADMIN` | 分配维修人员、查看全部工单 | 已实现分配；全部工单查询尚未实现 |
+| `ADMIN` | 分配维修人员、分页查看全部工单 | 已实现分配和基础分页；筛选尚未实现 |
 
 当前没有实现 Spring Security、JWT 或正式登录功能。
 
@@ -593,7 +593,7 @@ http://localhost:8080
 
 ## API 接口
 
-当前共实现八个接口：
+当前共实现九个接口：
 
 | 方法 | URL | 功能 |
 |---|---|---|
@@ -605,6 +605,31 @@ http://localhost:8080
 | `PATCH` | `/tickets/{id}/processing` | 当前维修人员开始处理工单 |
 | `PATCH` | `/tickets/{id}/resolution` | 当前维修人员提交维修结果 |
 | `PATCH` | `/tickets/{id}/closure` | 工单创建人确认问题解决并关闭工单 |
+| `GET` | `/tickets` | 管理员分页查询全部工单 |
+
+### 管理员分页查询工单
+
+```http
+GET /tickets?page=1&pageSize=10
+X-User-Id: 4
+```
+
+只有 `ADMIN` 可以访问。`page` 默认值为 1，必须大于等于 1；`pageSize` 默认值为 10，范围为 1—100。查询使用数据库 `COUNT(*)`、`LIMIT/OFFSET`，排序固定为 `created_at DESC, id DESC`，因此创建时间相同的工单仍有稳定顺序。
+
+响应字段为 `items`、`total`、`page` 和 `pageSize`。超出最后一页时返回 `200`、空数组和真实 `total`，不返回 404；非法分页参数返回 400；非管理员返回 403。
+
+示例：
+
+```json
+{
+  "items": [],
+  "total": 6,
+  "page": 99,
+  "pageSize": 2
+}
+```
+
+当前已完成分页的自动化测试和一次真实 HTTP 验证。状态/创建人/维修人员筛选、分页查询对应的 EXPLAIN 与索引验证仍待完成。
 
 ---
 
@@ -1432,10 +1457,10 @@ updatedAt
 mvn test
 ```
 
-当前共有 **48 条测试**：
+当前共有 **56 条测试**：
 
-- 28 条 `TicketController` MockMvc 测试。
-- 14 条 Service 真实数据库集成测试。
+- 33 条 `TicketController` MockMvc 测试。
+- 17 条 Service 真实数据库集成测试。
 - 5 条事务失败回滚测试。
 - 1 条 Spring 上下文启动测试。
 
@@ -1443,7 +1468,7 @@ mvn test
 
 ### Controller 测试
 
-当前共有 28 条 Controller MockMvc 测试：
+当前共有 33 条 Controller MockMvc 测试：
 
 1. 合法创建请求返回 `201`。
 2. 空标题返回 `400`。
@@ -1473,6 +1498,11 @@ mvn test
 26. 关闭的工单不存在时返回 `404`。
 27. 无权限用户关闭工单时返回 `403`。
 28. 工单状态不允许关闭时返回 `409`。
+29. 管理员使用默认分页参数查询返回 `200` 和分页元数据。
+30. 管理员使用自定义 page/pageSize 查询返回正确页码和 items。
+31. 管理员查询空页时返回空数组并保留 total。
+32. 非法分页参数或非数字 page 返回 `400`，且不调用 Service。
+33. 管理员列表被非管理员访问时返回 `403`。
 
 Controller 测试使用模拟的 Service，不连接真实数据库，主要验证：
 
@@ -1485,7 +1515,7 @@ Controller 测试使用模拟的 Service，不连接真实数据库，主要验�
 
 ### Service 集成测试
 
-Service 集成测试连接真实 MySQL，当前共有 14 条测试：
+Service 集成测试连接真实 MySQL，当前共有 17 条测试：
 
 1. 创建工单时同时插入工单和创建日志，并正确回填数据库生成的主键。
 2. 管理员分配后，工单状态变为 `ASSIGNED`、`assignee_id` 正确保存，并写入分配日志。
@@ -1501,6 +1531,9 @@ Service 集成测试连接真实 MySQL，当前共有 14 条测试：
 12. 非 `REQUESTER` 用户尝试关闭工单时返回 403，状态和日志均不变化。
 13. 其他 `REQUESTER` 尝试关闭不属于自己的工单时返回 403，状态和日志均不变化。
 14. 尝试关闭 `PROCESSING` 或已经 `CLOSED` 的工单时返回 409，并且不会新增 CLOSED 日志。
+15. 管理员分页查询第一页和第二页时返回稳定顺序、正确 page/pageSize 与真实 total。
+16. 超出最后一页时返回空 items 但保留真实 total；相同 created_at 时按 id DESC 排序。
+17. REQUESTER、WORKER 和不存在用户查询管理员列表时均返回 403，分页边界由 DTO/Controller 阶段返回 400。
 
 ### 事务回滚测试
 
@@ -1568,14 +1601,17 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - [x] 实现关闭工单的条件更新和状态日志
 - [x] 实现关闭事务及失败回滚
 - [x] 完成 closure 接口真实 HTTP 与数据库验证
-- [x] 完成 28 条 Controller MockMvc 测试
-- [x] 完成 14 条 Service 真实数据库集成测试
+- [x] 实现管理员分页查询全部工单
+- [x] 完成分页参数边界、COUNT、LIMIT/OFFSET 和稳定排序
+- [x] 完成分页 Controller 与 Service 真实数据库测试
+- [x] 完成 33 条 Controller MockMvc 测试
+- [x] 完成 17 条 Service 真实数据库集成测试
 - [x] 完成 5 条事务失败回滚测试
 - [x] 完成核心工单状态流闭环
-- [ ] 实现管理员查看全部工单
 - [ ] 修复工单详情接口的越权查询问题
 - [ ] 实现正式登录和权限认证
-- [ ] 增加分页和筛选
+- [ ] 增加管理员列表的状态、创建人和维修人员筛选
+- [ ] 使用 EXPLAIN 验证分页筛选查询和索引
 - [ ] 增加统一业务错误码
 - [ ] 完成接口文档和健康检查
 - [ ] 完成部署
@@ -1589,8 +1625,7 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - `X-User-Id` 可以被客户端伪造，不是真正的身份认证。
 - 创建工单接口还没有校验请求人是否为 `REQUESTER`。
 - 工单详情接口尚未进行归属和角色权限校验。
-- 尚未实现管理员查看全部工单。
-- 列表接口没有分页、筛选和数量限制。
+- 管理员列表已支持基础分页和数量上限，但尚未实现状态、创建人和维修人员筛选。
 - 状态更新使用条件更新进行基础并发保护，但尚未实现版本号或完整的乐观锁机制。
 - 尚未实现统一的业务错误码。
 - 尚未生成 OpenAPI/Swagger 接口文档。
@@ -1621,7 +1656,7 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 
 ```text
 状态流闭环（已完成）
-→ 列表分页、筛选和索引验证
+→ 列表筛选和索引验证
 → 权限与身份认证
 → 接口文档和工程完善
 → Docker 与部署
@@ -1633,18 +1668,16 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 
 后续按照以下顺序继续开发：
 
-1. 实现管理员查看全部工单。
-2. 为工单列表增加分页和稳定排序。
-3. 增加状态、分类、优先级、创建人和维修人员筛选。
-4. 使用 `EXPLAIN` 验证列表查询和索引。
-5. 修复工单详情接口的越权查询问题。
-6. 接入 Spring Security 和正式登录认证。
-7. 增加统一业务错误码。
-8. 增加 OpenAPI/Swagger 接口文档。
-9. 增加 Actuator 健康检查和必要的应用日志。
-10. 使用 Docker Compose 启动 MySQL 和应用。
-11. 完成从空环境启动的 README 复验。
-12. 整理项目演示、简历描述和面试问答。
+1. 为管理员分页列表增加 status、creatorId、assigneeId 筛选，并保证 COUNT 与列表条件一致。
+2. 使用 `EXPLAIN` 验证筛选、排序和索引选择。
+3. 修复工单详情接口的越权查询问题。
+4. 接入 Spring Security 和正式登录认证。
+5. 增加统一业务错误码。
+6. 增加 OpenAPI/Swagger 接口文档。
+7. 增加 Actuator 健康检查和必要的应用日志。
+8. 使用 Docker Compose 启动 MySQL 和应用。
+9. 完成从空环境启动的 README 复验。
+10. 整理项目演示、简历描述和面试问答。
 
 ---
 
