@@ -4,6 +4,22 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.example.campusworkorder.mapper.TicketMapper">
+    <sql id="ticketFilterWhere">
+        <where>
+            <if test="query.status!=null">
+                AND status=#{query.status}
+            </if>
+
+            <if test="query.creatorId!=null">
+                AND creator_id=#{query.creatorId}
+            </if>
+
+            <if test="query.assigneeId != null">
+                AND assignee_id = #{query.assigneeId}
+            </if>
+        </where>
+    </sql>
+    
     <select id="selectById"
             parameterType="long"
             resultType="com.example.campusworkorder.entity.Ticket">
@@ -22,9 +38,10 @@
         WHERE id = #{id}
     </select>
 
-    <select id="countAll">
+    <select id="countByQuery">
         SELECT count(*)
         FROM ticket
+        <include refid="ticketFilterWhere"/>
     </select>
 
     <select id="selectByCreatorId"
@@ -79,6 +96,7 @@
         created_at,
         updated_at
         FROM ticket
+        <include refid="ticketFilterWhere"/>
         order by created_at DESC, id DESC
         LIMIT #{pageSize} OFFSET #{offset}
     </select>

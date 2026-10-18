@@ -649,4 +649,64 @@ public class TicketControllerTest {
                 )
         );
     }
+    @Test
+    void selectTicketByPage_withFilterParameter() throws Exception{
+        Ticket ticket2=exampleTicket();
+        Ticket ticket=exampleTicket2();
+        ticket2.setAssigneeId(3L);
+        ticket2.setStatus(TicketStatus.ASSIGNED);
+        ticket.setAssigneeId(3L);
+        ticket.setStatus(TicketStatus.ASSIGNED);
+        List<Ticket> tickets=new ArrayList<>();
+        tickets.add(ticket2);
+        tickets.add(ticket);
+        PageResult<Ticket> pageResult=new PageResult<>();
+        pageResult.setItems(tickets);
+        pageResult.setTotal(2);
+        pageResult.setPage(2);
+        pageResult.setPageSize(2);
+        when(ticketService.selectAdminTickets(eq(4L),any(TicketPageQuery.class)))
+                .thenReturn(pageResult);
+        mockMvc.perform(get("/tickets")
+                        .header("X-User-Id","4")
+                        .param("page","2")
+                        .param("pageSize","2")
+                        .param("status","ASSIGNED")
+                        .param("creatorId","12")
+                        .param("assigneeId","3"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.pageSize").value(2))
+                .andExpect(jsonPath("$.total").value(2));
+        verify(ticketService).selectAdminTickets(
+                eq(4L),
+                argThat(query ->
+                                query.getPage() == 2 && query.getPageSize() == 2 && query.getStatus()==TicketStatus.ASSIGNED
+                        &&query.getCreatorId()==12&&query.getAssigneeId()==3
+                )
+        );
+    }
+    @Test
+    void selectTicketByPage_withWrongParameter_shouldReturn400() throws Exception{
+        mockMvc.perform(get("/tickets")
+                        .header("X-User-Id","4")
+                        .param("page","2")
+                        .param("pageSize","2")
+                        .param("status","BROKEN"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/tickets")
+                        .header("X-User-Id","4")
+                        .param("page","2")
+                        .param("pageSize","2")
+                        .param("creatorId","0"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/tickets")
+                        .header("X-User-Id","4")
+                        .param("page","2")
+                        .param("pageSize","2")
+                        .param("assigneeId","-1"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(ticketService);
+    }
 }

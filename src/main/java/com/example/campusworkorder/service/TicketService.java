@@ -147,8 +147,8 @@ public class TicketService {
         if(role!=UserRole.ADMIN)
             throw new BusinessException(HttpStatus.FORBIDDEN,"You are not ADMIN");
         long offset = (page - 1L) * pageSize;
-        List<Ticket> tickets=ticketMapper.selectPage(offset,pageSize);
-        long count=ticketMapper.countAll();
+        List<Ticket> tickets=ticketMapper.selectPage(ticketPageQuery,offset,pageSize);
+        long count=ticketMapper.countByQuery(ticketPageQuery);
         PageResult<Ticket> pageResult=new PageResult<>();
         pageResult.setItems(tickets);
         pageResult.setPage(page);

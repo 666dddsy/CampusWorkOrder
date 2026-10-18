@@ -42,9 +42,9 @@ create table if not exists ticket(
 
     index idx_ticket_status_created_at(status,created_at),
     index idx_ticket_assignee_status(assignee_id,status),
-    index idx_ticket_creator_id(creator_id)
+    index idx_ticket_creator_id(creator_id),
+    index idx_ticket_created_at_id(created_at DESC,id DESC)
 );
-
 DESC ticket;
 
 create table if not exists ticket_log(
@@ -68,5 +68,5 @@ create table if not exists ticket_log(
 
 DESC ticket_log;
 
-explain select * from ticket where creator_id=1;
+explain select * from ticket ;
 

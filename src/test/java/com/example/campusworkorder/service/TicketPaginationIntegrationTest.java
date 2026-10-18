@@ -15,9 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -190,6 +189,186 @@ class TicketPaginationIntegrationTest {
         }
     }
 
+    @Test
+    void admin_withSingleParameter_shouldReturn200(){
+        Fixture fixture=prepareFixture();
+        try {
+            TicketPageQuery query1=new TicketPageQuery();
+            TicketPageQuery query2=new TicketPageQuery();
+            TicketPageQuery query3=new TicketPageQuery();
+            query1.setStatus(TicketStatus.ASSIGNED);
+            query2.setCreatorId(fixture.requesterId);
+            query3.setAssigneeId(fixture.workerId);
+            PageResult<Ticket> page1=ticketService.selectAdminTickets(fixture.adminId,query1);
+            PageResult<Ticket> page2=ticketService.selectAdminTickets(fixture.adminId,query2);
+            PageResult<Ticket> page3=ticketService.selectAdminTickets(fixture.adminId,query3);
+            assertNotNull(page1);
+            assertEquals(5, page2.getItems().size());
+            assertEquals(5, page3.getItems().size());
+            assertEquals(5, page2.getTotal());
+            assertEquals(5, page3.getTotal());
+
+            List<Long> expectIds2=jdbcTemplate.query(
+                    """
+                            SELECT id from ticket
+                            WHERE creator_id=?
+                            ORDER BY created_at DESC, id DESC
+                            """,
+                    (rs, rowNum) -> rs.getLong("id"),
+                    fixture.requesterId
+            );
+            List<Long> expectIds3=jdbcTemplate.query(
+                    """
+                            SELECT id from ticket
+                            WHERE assignee_id=?
+                            ORDER BY created_at DESC, id DESC
+                            """,
+                    (rs, rowNum) -> rs.getLong("id"),
+                    fixture.workerId
+            );
+            List<Long> expectIds1=jdbcTemplate.query(
+                    """
+                            SELECT id from ticket
+                            Where status=?
+                            ORDER BY created_at DESC, id DESC
+                            """,
+                    (rs,rowNum)->rs.getLong("id"),
+                    "ASSIGNED"
+            );
+            List<Long> ids1=page1.getItems()
+                    .stream()
+                    .map(Ticket::getId)
+                    .toList();
+            List<Long> ids2=page2.getItems()
+                            .stream()
+                                    .map(Ticket::getId)
+                                            .toList();
+            List<Long> ids3=page3.getItems()
+                            .stream()
+                                    .map(Ticket::getId)
+                                            .toList();
+            int expectedSize = Math.min(query1.getPageSize(), expectIds1.size());
+
+            assertEquals(
+                    expectIds1.subList(0, expectedSize),
+                    ids1
+            );
+            assertEquals(expectIds1.size(), page1.getTotal());
+            assertEquals(expectIds2,ids2);
+            assertEquals(expectIds2.size(), page2.getTotal());
+            assertEquals(expectIds3,ids3);
+            assertEquals(expectIds3.size(), page3.getTotal());
+        }finally{
+            cleanup(fixture);
+        }
+    }
+
+    @Test
+    void admin_withCombinedFilters_shouldOnlyReturnTicketsMatchingAllConditions(){
+        Fixture fixture=prepareFixture();
+        try {
+            TicketPageQuery query=new TicketPageQuery();
+            query.setStatus(TicketStatus.ASSIGNED);
+            query.setCreatorId(fixture.requesterId);
+            query.setAssigneeId(fixture.workerId);
+            // B. 期望值来自数据库，三个条件都写上（跟目标三一个套路）
+            List<Long> expectedIds=jdbcTemplate.query(
+                            """
+                            SELECT id FROM ticket
+                            WHERE creator_id=? AND assignee_id=? AND status=?
+                            ORDER BY created_at DESC, id DESC
+                            """,
+                            (rs,rowNum)->rs.getLong("id"),
+                    fixture.requesterId,fixture.workerId,"ASSIGNED"
+            );// 先存 5 条夹具
+            String suffix=String.valueOf(System.nanoTime());
+            fixture.ticketIds.add(insertTicket(fixture.requesterId,fixture.workerId,
+                    TicketStatus.CREATED,"combo_status_"+suffix));
+            fixture.ticketIds.add(insertTicket(fixture.adminId,fixture.workerId,
+                    TicketStatus.ASSIGNED,"combo_creator_"+suffix));
+            fixture.ticketIds.add(insertTicket(fixture.requesterId,fixture.adminId,
+                    TicketStatus.ASSIGNED,"combo_assignee_"+suffix));
+            PageResult<Ticket> result=ticketService.selectAdminTickets(fixture.adminId,query);
+
+            assertEquals(5,result.getItems().size());
+            assertEquals(5,result.getTotal());
+            assertEquals(expectedIds,
+                    result.getItems().stream().map(Ticket::getId).toList());
+        } finally {
+            cleanup(fixture);
+        }
+    }
+
+    @Test
+    void admin_withCombinedFilters_shouldReturnEmptyItemsAndZeroTotal(){
+        Fixture fixture=prepareFixture();
+        try {
+            // 先确认单个条件有数据，证明空结果是"组合"造成的
+            TicketPageQuery byCreator=new TicketPageQuery();
+            byCreator.setCreatorId(fixture.requesterId);
+            assertEquals(5,ticketService.selectAdminTickets(fixture.adminId,byCreator).getTotal());
+
+            TicketPageQuery query=new TicketPageQuery();
+            query.setStatus(TicketStatus.CLOSED);   // 夹具都是 ASSIGNED
+            query.setCreatorId(fixture.requesterId);
+            query.setAssigneeId(fixture.workerId);
+            query.setPage(1);
+            query.setPageSize(2);
+
+            PageResult<Ticket> result=ticketService.selectAdminTickets(fixture.adminId,query);
+
+            assertNotNull(result.getItems());
+            assertTrue(result.getItems().isEmpty());
+            assertEquals(0,result.getTotal());
+            assertEquals(1,result.getPage());
+            assertEquals(2,result.getPageSize());
+        } finally {
+            cleanup(fixture);
+        }
+    }
+
+    @Test
+    void admin_filterResultAcrossTwoPages_shouldKeepSameTotalAndNoDuplicate(){
+        Fixture fixture=prepareFixture();
+        try {
+            List<Long> expectedIds=jdbcTemplate.query("""
+                SELECT id FROM ticket WHERE creator_id=?
+                ORDER BY created_at DESC, id DESC
+                """,(rs,rowNum)->rs.getLong("id"),fixture.requesterId);
+            assertEquals(5,expectedIds.size());
+
+            TicketPageQuery first=new TicketPageQuery();
+            first.setCreatorId(fixture.requesterId);
+            first.setPage(1);
+            first.setPageSize(2);
+
+            TicketPageQuery second=new TicketPageQuery();
+            second.setCreatorId(fixture.requesterId);
+            second.setPage(2);
+            second.setPageSize(2);
+
+            PageResult<Ticket> page1=ticketService.selectAdminTickets(fixture.adminId,first);
+            PageResult<Ticket> page2=ticketService.selectAdminTickets(fixture.adminId,second);
+
+            assertEquals(5,page1.getTotal());
+            assertEquals(5,page2.getTotal());
+            assertEquals(2,page1.getItems().size());
+            assertEquals(2,page2.getItems().size());
+
+            List<Long> ids1=page1.getItems().stream().map(Ticket::getId).toList();
+            List<Long> ids2=page2.getItems().stream().map(Ticket::getId).toList();
+
+            assertEquals(expectedIds.subList(0,2),ids1);
+            assertEquals(expectedIds.subList(2,4),ids2);
+
+            Set<Long> union=new HashSet<>(ids1);
+            union.addAll(ids2);
+            assertEquals(4,union.size());   // 两页 4 条互不重复
+        } finally {
+            cleanup(fixture);
+        }
+    }
+
     private Fixture prepareFixture() {
         Fixture fixture = new Fixture();
 
@@ -247,7 +426,7 @@ class TicketPaginationIntegrationTest {
                     "测试地点",
                     TicketCategory.NETWORK.name(),
                     TicketPriority.HIGH.name(),
-                    TicketStatus.CREATED.name(),
+                    TicketStatus.ASSIGNED.name(),
                     sameCreatedAt,
                     sameCreatedAt
             );
@@ -294,6 +473,20 @@ class TicketPaginationIntegrationTest {
                 Long.class,
                 username
         );
+    }
+
+    private Long insertTicket(Long creatorId,Long assigneeId,TicketStatus status,String title){
+        LocalDateTime createdAt=LocalDateTime.of(2099,1,1,0,0);
+        jdbcTemplate.update("""
+            INSERT INTO ticket(creator_id,assignee_id,title,description,location,
+                               category,priority,status,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+            """,
+                creatorId,assigneeId,title,"组合筛选测试工单","测试地点",
+                TicketCategory.ELECTRICAL.name(),TicketPriority.LOW.name(),
+                status.name(),createdAt,createdAt);
+        return jdbcTemplate.queryForObject(
+                "SELECT id FROM ticket WHERE title=?",Long.class,title);
     }
 
     private void cleanup(Fixture fixture) {

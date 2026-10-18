@@ -22,7 +22,7 @@ CampusWorkOrder 是一个基于 Spring Boot、MyBatis 和 MySQL 实现的校园�
 CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 ```
 
-管理员分页列表已经实现；后续将继续完善分页筛选、正式身份认证、接口文档和部署。
+管理员分页列表及状态、创建人、维修人员筛选已经实现；后续将继续完善索引验证、正式身份认证、接口文档和部署。
 
 ---
 
@@ -49,7 +49,7 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 - Service 真实数据库集成测试。
 - 事务失败回滚测试。
 - 真实 HTTP 请求和数据库结果验证。
-- 仅 `ADMIN` 可访问的管理员分页列表，支持默认参数、边界校验、稳定排序和真实 HTTP 验证。
+- 仅 `ADMIN` 可访问的管理员分页列表，支持状态、创建人、维修人员筛选、默认参数、边界校验、稳定排序和真实 HTTP 验证。
 
 尚未实现：
 
@@ -112,7 +112,7 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 |---|---|---|
 | `REQUESTER` | 创建工单、查看自己的工单、确认关闭 | 已实现 |
 | `WORKER` | 查看被分配的工单、开始处理、提交维修结果 | 已实现 |
-| `ADMIN` | 分配维修人员、分页查看全部工单 | 已实现分配和基础分页；筛选尚未实现 |
+| `ADMIN` | 分配维修人员、分页和筛选查看全部工单 | 已实现 |
 
 当前没有实现 Spring Security、JWT 或正式登录功能。
 
@@ -409,6 +409,7 @@ note = 报修人确认问题已解决并关闭工单
 idx_ticket_status_created_at(status, created_at)
 idx_ticket_assignee_status(assignee_id, status)
 idx_ticket_creator_id(creator_id)
+idx_ticket_created_at_id(created_at DESC, id DESC)
 idx_ticket_log_ticket_time(ticket_id, created_at)
 ```
 
@@ -417,7 +418,10 @@ idx_ticket_log_ticket_time(ticket_id, created_at)
 - `idx_ticket_creator_id`：支持报修人查询自己创建的工单。
 - `idx_ticket_assignee_status`：支持维修人员按 `assignee_id` 查询工单，也支持按照维修人员和状态进行筛选。
 - `idx_ticket_status_created_at`：支持按照状态和创建时间查询。
+- `idx_ticket_created_at_id`：schema 中为全量列表的稳定排序声明的候选索引，是否被分页筛选 SQL 实际采用仍需通过 `EXPLAIN` 验证。
 - `idx_ticket_log_ticket_time`：支持查询一张工单的状态变化历史。
+
+修改 `CREATE TABLE IF NOT EXISTS` 内的索引定义不会自动改变已经存在的 ticket 表。已有数据库需要在确认后执行对应的 `ALTER TABLE`，或者在明确的空数据库重新建表；README 当前不宣称本机已有表已经应用该索引。
 
 联合索引：
 
@@ -616,6 +620,23 @@ X-User-Id: 4
 
 只有 `ADMIN` 可以访问。`page` 默认值为 1，必须大于等于 1；`pageSize` 默认值为 10，范围为 1—100。查询使用数据库 `COUNT(*)`、`LIMIT/OFFSET`，排序固定为 `created_at DESC, id DESC`，因此创建时间相同的工单仍有稳定顺序。
 
+支持以下三个可选筛选参数：
+
+| 参数 | 类型 | 规则 |
+|---|---|---|
+| `status` | `TicketStatus` | 必须为 `CREATED`、`ASSIGNED`、`PROCESSING`、`RESOLVED` 或 `CLOSED` |
+| `creatorId` | Long | 传入时必须大于 0 |
+| `assigneeId` | Long | 传入时必须大于 0 |
+
+三个参数均不传时查询全部工单；同时传入多个参数时使用 AND 组合，结果必须同时满足全部条件。例如：
+
+```http
+GET /tickets?page=1&pageSize=2&status=CLOSED&creatorId=1&assigneeId=3
+X-User-Id: 4
+```
+
+COUNT 与分页列表复用同一段动态 WHERE 条件，因此 `total` 表示筛选后的总条数。合法但不存在的 creatorId/assigneeId 返回 `200 + items=[] + total=0`；非法枚举或非正数 ID 返回 400。
+
 响应字段为 `items`、`total`、`page` 和 `pageSize`。超出最后一页时返回 `200`、空数组和真实 `total`，不返回 404；非法分页参数返回 400；非管理员返回 403。
 
 示例：
@@ -629,7 +650,7 @@ X-User-Id: 4
 }
 ```
 
-当前已完成分页的自动化测试和一次真实 HTTP 验证。状态/创建人/维修人员筛选、分页查询对应的 EXPLAIN 与索引验证仍待完成。
+当前已完成分页筛选自动化测试和真实 HTTP 验证：`status=CLOSED` 返回匹配工单及筛选后 total，非法 `status=BROKEN` 返回 400，不存在的 creatorId 返回 `200 + [] + total=0`。筛选查询对应的 EXPLAIN 与索引验证仍待完成。
 
 ---
 
@@ -1457,10 +1478,10 @@ updatedAt
 mvn test
 ```
 
-当前共有 **56 条测试**：
+当前共有 **62 条测试**：
 
-- 33 条 `TicketController` MockMvc 测试。
-- 17 条 Service 真实数据库集成测试。
+- 35 条 `TicketController` MockMvc 测试。
+- 21 条 Service 真实数据库集成测试。
 - 5 条事务失败回滚测试。
 - 1 条 Spring 上下文启动测试。
 
@@ -1468,7 +1489,7 @@ mvn test
 
 ### Controller 测试
 
-当前共有 33 条 Controller MockMvc 测试：
+当前共有 35 条 Controller MockMvc 测试：
 
 1. 合法创建请求返回 `201`。
 2. 空标题返回 `400`。
@@ -1503,6 +1524,8 @@ mvn test
 31. 管理员查询空页时返回空数组并保留 total。
 32. 非法分页参数或非数字 page 返回 `400`，且不调用 Service。
 33. 管理员列表被非管理员访问时返回 `403`。
+34. status、creatorId、assigneeId 能正确绑定到分页查询 DTO 并传入 Service。
+35. 非法 status、creatorId=0 和 assigneeId=-1 返回 `400`，且不调用 Service。
 
 Controller 测试使用模拟的 Service，不连接真实数据库，主要验证：
 
@@ -1515,7 +1538,7 @@ Controller 测试使用模拟的 Service，不连接真实数据库，主要验�
 
 ### Service 集成测试
 
-Service 集成测试连接真实 MySQL，当前共有 17 条测试：
+Service 集成测试连接真实 MySQL，当前共有 21 条测试：
 
 1. 创建工单时同时插入工单和创建日志，并正确回填数据库生成的主键。
 2. 管理员分配后，工单状态变为 `ASSIGNED`、`assignee_id` 正确保存，并写入分配日志。
@@ -1534,6 +1557,10 @@ Service 集成测试连接真实 MySQL，当前共有 17 条测试：
 15. 管理员分页查询第一页和第二页时返回稳定顺序、正确 page/pageSize 与真实 total。
 16. 超出最后一页时返回空 items 但保留真实 total；相同 created_at 时按 id DESC 排序。
 17. REQUESTER、WORKER 和不存在用户查询管理员列表时均返回 403，分页边界由 DTO/Controller 阶段返回 400。
+18. 分别按 status、creatorId、assigneeId 单条件查询时，items 和 total 与真实数据库结果一致。
+19. 同时使用 status、creatorId、assigneeId 时只返回满足全部 AND 条件的工单。
+20. 组合筛选没有匹配结果时返回空 items 和 total=0。
+21. 筛选结果跨两页时，两页 total 保持一致，排序正确且工单不重复。
 
 ### 事务回滚测试
 
@@ -1604,13 +1631,15 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - [x] 实现管理员分页查询全部工单
 - [x] 完成分页参数边界、COUNT、LIMIT/OFFSET 和稳定排序
 - [x] 完成分页 Controller 与 Service 真实数据库测试
-- [x] 完成 33 条 Controller MockMvc 测试
-- [x] 完成 17 条 Service 真实数据库集成测试
+- [x] 实现管理员列表的状态、创建人和维修人员筛选
+- [x] 保证 COUNT 与分页列表复用同一动态 WHERE 条件
+- [x] 完成筛选的单条件、组合条件、空结果和跨页测试
+- [x] 完成 35 条 Controller MockMvc 测试
+- [x] 完成 21 条 Service 真实数据库集成测试
 - [x] 完成 5 条事务失败回滚测试
 - [x] 完成核心工单状态流闭环
 - [ ] 修复工单详情接口的越权查询问题
 - [ ] 实现正式登录和权限认证
-- [ ] 增加管理员列表的状态、创建人和维修人员筛选
 - [ ] 使用 EXPLAIN 验证分页筛选查询和索引
 - [ ] 增加统一业务错误码
 - [ ] 完成接口文档和健康检查
@@ -1625,7 +1654,7 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - `X-User-Id` 可以被客户端伪造，不是真正的身份认证。
 - 创建工单接口还没有校验请求人是否为 `REQUESTER`。
 - 工单详情接口尚未进行归属和角色权限校验。
-- 管理员列表已支持基础分页和数量上限，但尚未实现状态、创建人和维修人员筛选。
+- 管理员列表已支持基础分页及 status、creatorId、assigneeId 筛选，但尚未完成各查询组合的 EXPLAIN 和索引验证。
 - 状态更新使用条件更新进行基础并发保护，但尚未实现版本号或完整的乐观锁机制。
 - 尚未实现统一的业务错误码。
 - 尚未生成 OpenAPI/Swagger 接口文档。
@@ -1668,16 +1697,15 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 
 后续按照以下顺序继续开发：
 
-1. 为管理员分页列表增加 status、creatorId、assigneeId 筛选，并保证 COUNT 与列表条件一致。
-2. 使用 `EXPLAIN` 验证筛选、排序和索引选择。
-3. 修复工单详情接口的越权查询问题。
-4. 接入 Spring Security 和正式登录认证。
-5. 增加统一业务错误码。
-6. 增加 OpenAPI/Swagger 接口文档。
-7. 增加 Actuator 健康检查和必要的应用日志。
-8. 使用 Docker Compose 启动 MySQL 和应用。
-9. 完成从空环境启动的 README 复验。
-10. 整理项目演示、简历描述和面试问答。
+1. 使用 `EXPLAIN` 验证筛选、排序和索引选择。
+2. 修复工单详情接口的越权查询问题。
+3. 接入 Spring Security 和正式登录认证。
+4. 增加统一业务错误码。
+5. 增加 OpenAPI/Swagger 接口文档。
+6. 增加 Actuator 健康检查和必要的应用日志。
+7. 使用 Docker Compose 启动 MySQL 和应用。
+8. 完成从空环境启动的 README 复验。
+9. 整理项目演示、简历描述和面试问答。
 
 ---
 
