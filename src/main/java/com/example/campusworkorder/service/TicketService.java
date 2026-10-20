@@ -31,6 +31,9 @@ public class TicketService {
 
     @Transactional
     public Long createTicket(Long creatorId,TicketCreateRequest ticketCreateRequest){
+        UserRole role=appUserMapper.selectRoleById(creatorId);
+        if (role!=UserRole.REQUESTER)
+            throw new BusinessException(HttpStatus.FORBIDDEN,"You are not Requester");
         Ticket ticket=toTicket(creatorId,ticketCreateRequest);
         int affectRows=ticketMapper.insert(ticket);
         if(affectRows!=1||ticket.getId()==null)
@@ -157,8 +160,31 @@ public class TicketService {
         return pageResult;
     }
 
+    //仅供内部查询
     public Ticket selectById(Long ticketId){
         return ticketMapper.selectById(ticketId);
+    }
+
+    public Ticket selectByIdWithRole(Long ticketId,Long currentUserId){
+        UserRole role=appUserMapper.selectRoleById(currentUserId);
+        if(role==null)
+            throw new BusinessException(HttpStatus.FORBIDDEN, "You don't have right to get the ticket");
+        Ticket ticket=ticketMapper.selectById(ticketId);
+        if(ticket==null)
+            return null;
+        return switch (role) {
+            case UserRole.ADMIN -> ticket;
+            case UserRole.REQUESTER -> {
+                if (!currentUserId.equals(ticket.getCreatorId()))
+                    throw new BusinessException(HttpStatus.FORBIDDEN, "You don't have right to get the ticket");
+                yield ticket;
+            }
+            case UserRole.WORKER -> {
+                if (!currentUserId.equals(ticket.getAssigneeId()))
+                    throw new BusinessException(HttpStatus.FORBIDDEN, "You don't have right to get the ticket");
+                yield ticket;
+            }
+        };
     }
 
     public List<Ticket> selectByCreatorId(Long creatorId){

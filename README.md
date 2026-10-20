@@ -30,8 +30,8 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 
 当前版本已经实现：
 
-- 报修人创建工单。
-- 按工单 ID 查询工单详情。
+- 只有数据库角色为 `REQUESTER` 的用户可以创建工单。
+- 按工单 ID 查询详情，并按 `ADMIN`、创建人或当前维修人员校验查看权限。
 - 报修人查询自己创建的工单列表。
 - 管理员为 `CREATED` 工单分配维修人员。
 - 维修人员查询自己被分配的工单列表。
@@ -54,7 +54,6 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 尚未实现：
 
 - Spring Security、JWT 和正式登录认证。
-- 列表条件筛选。
 - 统一业务错误码。
 - OpenAPI/Swagger 接口文档。
 - 生产环境部署。
@@ -112,7 +111,7 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 |---|---|---|
 | `REQUESTER` | 创建工单、查看自己的工单、确认关闭 | 已实现 |
 | `WORKER` | 查看被分配的工单、开始处理、提交维修结果 | 已实现 |
-| `ADMIN` | 分配维修人员、分页和筛选查看全部工单 | 已实现 |
+| `ADMIN` | 查看任意工单详情、分配维修人员、分页和筛选查看全部工单 | 已实现 |
 
 当前没有实现 Spring Security、JWT 或正式登录功能。
 
@@ -421,7 +420,7 @@ idx_ticket_log_ticket_time(ticket_id, created_at)
 - `idx_ticket_created_at_id`：schema 中为全量列表的稳定排序声明的候选索引，是否被分页筛选 SQL 实际采用仍需通过 `EXPLAIN` 验证。
 - `idx_ticket_log_ticket_time`：支持查询一张工单的状态变化历史。
 
-修改 `CREATE TABLE IF NOT EXISTS` 内的索引定义不会自动改变已经存在的 ticket 表。已有数据库需要在确认后执行对应的 `ALTER TABLE`，或者在明确的空数据库重新建表；README 当前不宣称本机已有表已经应用该索引。
+修改 `CREATE TABLE IF NOT EXISTS` 内的索引定义不会自动改变已经存在的 ticket 表。本机数据库已由用户通过单独 SQL 创建 `idx_ticket_created_at_id`；schema 中保留相同定义，用于后续空数据库初始化。索引已经存在不等于查询一定使用它，仍需针对实际分页筛选 SQL 执行 `EXPLAIN`。
 
 联合索引：
 
@@ -650,7 +649,7 @@ COUNT 与分页列表复用同一段动态 WHERE 条件，因此 `total` 表示�
 }
 ```
 
-当前已完成分页筛选自动化测试和真实 HTTP 验证：`status=CLOSED` 返回匹配工单及筛选后 total，非法 `status=BROKEN` 返回 400，不存在的 creatorId 返回 `200 + [] + total=0`。筛选查询对应的 EXPLAIN 与索引验证仍待完成。
+当前已完成分页筛选自动化测试、真实 HTTP 验证和本机小表 EXPLAIN。约 6 行数据下，无筛选列表使用全表扫描并额外排序；仅 status 使用 `(status,created_at)` 索引；仅 creatorId 或 assigneeId 时优化器选择全表扫描；三条件组合使用 `index_merge` 后仍需排序。COUNT 查询可使用覆盖索引、`ref` 或 `index_merge`。这些结果只代表当前小数据量，现有索引暂时保留，后续需要使用更大且接近真实分布的数据复测。
 
 ---
 
@@ -716,6 +715,14 @@ curl.exe -i -X POST "http://localhost:8080/tickets" `
 
 这些字段由请求头、Service 或数据库生成。
 
+只有数据库中角色为 `REQUESTER` 的用户可以创建工单。`ADMIN`、`WORKER` 或不存在的用户 ID 返回：
+
+```text
+403 Forbidden
+```
+
+角色校验发生在 `ticket` 和 `ticket_log` 写入之前；拒绝创建不会留下工单或创建日志。`X-User-Id` 仍是可伪造的临时身份参数，不等于正式认证。
+
 ### 参数校验
 
 | 字段 | 规则 |
@@ -748,12 +755,14 @@ curl.exe -i -X POST "http://localhost:8080/tickets" `
 
 ```http
 GET /tickets/{id}
+X-User-Id: 1
 ```
 
 PowerShell 示例：
 
 ```powershell
-curl.exe -i "http://localhost:8080/tickets/1"
+curl.exe -i "http://localhost:8080/tickets/1" `
+  -H "X-User-Id: 1"
 ```
 
 工单存在时返回：
@@ -768,9 +777,16 @@ curl.exe -i "http://localhost:8080/tickets/1"
 404 Not Found
 ```
 
-当前详情接口尚未进行用户身份和工单归属校验。
+详情权限规则：
 
-知道工单 ID 的请求者目前可以查询该工单，这属于当前版本的明确限制。
+- `ADMIN` 可以查看任意存在的工单。
+- `REQUESTER` 只能查看 `creatorId` 等于自己的工单。
+- `WORKER` 只能查看 `assigneeId` 等于自己的工单。
+- 不存在的用户或存在但没有资源归属的用户返回 `403 Forbidden`。
+- 合法用户查询不存在的工单返回 `404 Not Found`。
+- 缺少 `X-User-Id` 请求头返回 `400 Bad Request`。
+
+权限规则由 Service 校验；客户端仍可伪造 `X-User-Id`，因此当前只完成了业务权限边界，尚未完成安全登录认证。
 
 ---
 
@@ -1478,18 +1494,18 @@ updatedAt
 mvn test
 ```
 
-当前共有 **62 条测试**：
+当前源码共有 **68 条测试**：
 
-- 35 条 `TicketController` MockMvc 测试。
-- 21 条 Service 真实数据库集成测试。
+- 38 条 `TicketController` MockMvc 测试。
+- 24 条 Service 真实数据库集成测试。
 - 5 条事务失败回滚测试。
 - 1 条 Spring 上下文启动测试。
 
-用户已经在本机执行全部测试并确认通过。
+提交前应由用户在本机执行一次完整 `mvn test`，确认当前 68 条测试全部通过。
 
 ### Controller 测试
 
-当前共有 35 条 Controller MockMvc 测试：
+当前共有 38 条 Controller MockMvc 测试：
 
 1. 合法创建请求返回 `201`。
 2. 空标题返回 `400`。
@@ -1526,6 +1542,9 @@ mvn test
 33. 管理员列表被非管理员访问时返回 `403`。
 34. status、creatorId、assigneeId 能正确绑定到分页查询 DTO 并传入 Service。
 35. 非法 status、creatorId=0 和 assigneeId=-1 返回 `400`，且不调用 Service。
+36. 详情 Service 抛出权限异常时返回 `403` 和对应 message。
+37. 详情缺少 `X-User-Id` 时返回 `400`，且不调用 Service。
+38. 非 `REQUESTER` 创建工单时返回 `403` 和对应 message。
 
 Controller 测试使用模拟的 Service，不连接真实数据库，主要验证：
 
@@ -1538,7 +1557,7 @@ Controller 测试使用模拟的 Service，不连接真实数据库，主要验�
 
 ### Service 集成测试
 
-Service 集成测试连接真实 MySQL，当前共有 21 条测试：
+Service 集成测试连接真实 MySQL，当前共有 24 条测试：
 
 1. 创建工单时同时插入工单和创建日志，并正确回填数据库生成的主键。
 2. 管理员分配后，工单状态变为 `ASSIGNED`、`assignee_id` 正确保存，并写入分配日志。
@@ -1561,6 +1580,9 @@ Service 集成测试连接真实 MySQL，当前共有 21 条测试：
 19. 同时使用 status、creatorId、assigneeId 时只返回满足全部 AND 条件的工单。
 20. 组合筛选没有匹配结果时返回空 items 和 total=0。
 21. 筛选结果跨两页时，两页 total 保持一致，排序正确且工单不重复。
+22. `ADMIN`、工单创建人和被分配维修人员查询同一张工单详情均成功。
+23. 其他 `REQUESTER`、其他 `WORKER` 和不存在用户查询详情返回 403；合法用户查询不存在工单返回 null。
+24. `ADMIN`、`WORKER` 和不存在用户创建工单均返回 403，且 ticket 与 ticket_log 的总行数不增加。
 
 ### 事务回滚测试
 
@@ -1634,13 +1656,15 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - [x] 实现管理员列表的状态、创建人和维修人员筛选
 - [x] 保证 COUNT 与分页列表复用同一动态 WHERE 条件
 - [x] 完成筛选的单条件、组合条件、空结果和跨页测试
-- [x] 完成 35 条 Controller MockMvc 测试
-- [x] 完成 21 条 Service 真实数据库集成测试
+- [x] 完成 38 条 Controller MockMvc 测试
+- [x] 完成 24 条 Service 真实数据库集成测试
 - [x] 完成 5 条事务失败回滚测试
 - [x] 完成核心工单状态流闭环
-- [ ] 修复工单详情接口的越权查询问题
+- [x] 修复工单详情接口的越权查询问题
+- [x] 限制只有 `REQUESTER` 可以创建工单
 - [ ] 实现正式登录和权限认证
-- [ ] 使用 EXPLAIN 验证分页筛选查询和索引
+- [x] 使用当前小数据量完成分页筛选查询和索引的初步 EXPLAIN
+- [ ] 使用更大且接近真实分布的数据复测分页筛选查询和索引
 - [ ] 增加统一业务错误码
 - [ ] 完成接口文档和健康检查
 - [ ] 完成部署
@@ -1652,9 +1676,8 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 当前版本存在以下明确限制：
 
 - `X-User-Id` 可以被客户端伪造，不是真正的身份认证。
-- 创建工单接口还没有校验请求人是否为 `REQUESTER`。
-- 工单详情接口尚未进行归属和角色权限校验。
-- 管理员列表已支持基础分页及 status、creatorId、assigneeId 筛选，但尚未完成各查询组合的 EXPLAIN 和索引验证。
+- 当前角色和资源归属校验依赖客户端提供的临时用户 ID，不能防止身份冒用。
+- 管理员列表已完成当前约 6 行小表的初步 EXPLAIN，但结果不能代表大数据量下的索引选择。
 - 状态更新使用条件更新进行基础并发保护，但尚未实现版本号或完整的乐观锁机制。
 - 尚未实现统一的业务错误码。
 - 尚未生成 OpenAPI/Swagger 接口文档。
@@ -1685,8 +1708,9 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 
 ```text
 状态流闭环（已完成）
-→ 列表筛选和索引验证
-→ 权限与身份认证
+→ 列表筛选与小表 EXPLAIN（已完成）
+→ 临时身份下的详情与创建权限（已完成）
+→ 正式身份认证
 → 接口文档和工程完善
 → Docker 与部署
 ```
@@ -1697,15 +1721,14 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 
 后续按照以下顺序继续开发：
 
-1. 使用 `EXPLAIN` 验证筛选、排序和索引选择。
-2. 修复工单详情接口的越权查询问题。
-3. 接入 Spring Security 和正式登录认证。
-4. 增加统一业务错误码。
-5. 增加 OpenAPI/Swagger 接口文档。
-6. 增加 Actuator 健康检查和必要的应用日志。
-7. 使用 Docker Compose 启动 MySQL 和应用。
-8. 完成从空环境启动的 README 复验。
-9. 整理项目演示、简历描述和面试问答。
+1. 接入 Spring Security 和正式登录认证，移除对客户端自填 `X-User-Id` 的信任。
+2. 使用更大且接近真实分布的数据复测筛选、排序和索引选择。
+3. 增加统一业务错误码。
+4. 增加 OpenAPI/Swagger 接口文档。
+5. 增加 Actuator 健康检查和必要的应用日志。
+6. 使用 Docker Compose 启动 MySQL 和应用。
+7. 完成从空环境启动的 README 复验。
+8. 整理项目演示、简历描述和面试问答。
 
 ---
 

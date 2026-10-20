@@ -153,11 +153,32 @@ public class TicketControllerTest {
     verifyNoInteractions(ticketService);
     }
     @Test
-    void selectById_withNotNull_shouldReturn200()throws Exception{
+    void createTicket_withNonRequester_shouldReturn403()throws Exception{
+        when(ticketService.createTicket(eq(4L),any(TicketCreateRequest.class)))
+                .thenThrow(new BusinessException(HttpStatus.FORBIDDEN,"You are not Requester"));
+        mockMvc.perform(post("/tickets")
+                        .header("X-User-Id", "4")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "宿舍水管漏水",
+                                  "description": "洗手池下方持续漏水",
+                                  "location": "滨江宿舍3栋412",
+                                  "category": "PLUMBING",
+                                  "priority": "MEDIUM"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You are not Requester"));
+    }
+
+    @Test
+    void selectByIdWithRole_withNotNull_shouldReturn200()throws Exception{
         Ticket ticket=exampleTicket();
-        when(ticketService.selectById(101L))
+        when(ticketService.selectByIdWithRole(101L,12L))
                 .thenReturn(ticket);
-        mockMvc.perform(get("/tickets/101"))
+        mockMvc.perform(get("/tickets/101")
+                        .header("X-User-Id","12"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(101))
                 .andExpect(jsonPath("$.creatorId").value(12))
@@ -167,16 +188,34 @@ public class TicketControllerTest {
                 .andExpect(jsonPath("$.priority").value("MEDIUM"))
                 .andExpect(jsonPath("$.status").value("CREATED"))
                 .andExpect(jsonPath("$.createdAt").exists());
-        verify(ticketService).selectById(101L);
+        verify(ticketService).selectByIdWithRole(101L,12L);
     }
     @Test
-    void selectById_withNull_shouldReturn404()throws Exception{
-        when(ticketService.selectById(any(Long.class)))
+    void selectByIdWithRole_withNull_shouldReturn404()throws Exception{
+        when(ticketService.selectByIdWithRole(any(Long.class),eq(4L)))
                 .thenReturn(null);
-        mockMvc.perform(get("/tickets/1"))
+        mockMvc.perform(get("/tickets/1")
+                        .header("X-User-Id","4"))
                 .andExpect(status().isNotFound());
-        verify(ticketService).selectById(1L);
+        verify(ticketService).selectByIdWithRole(1L,4L);
     }
+    @Test
+    void selectByIdWithRole_shouldReturn403()throws Exception{
+        when(ticketService.selectByIdWithRole(eq(13L),eq(2L)))
+                .thenThrow(new BusinessException(HttpStatus.FORBIDDEN,"You don't have right to get the ticket"));
+        mockMvc.perform(get("/tickets/13")
+                .header("X-User-Id","2"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You don't have right to get the ticket"));
+        verify(ticketService).selectByIdWithRole(eq(13L),eq(2L));
+    }
+    @Test
+    void selectByIdWithRole_withNonHeader_shouldReturn400()throws Exception{
+        mockMvc.perform(get("/tickets/1"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(ticketService);
+    }
+
     @Test
     void selectMine_withNotNull_shouldReturn200()throws Exception{
         Ticket ticket=exampleTicket();

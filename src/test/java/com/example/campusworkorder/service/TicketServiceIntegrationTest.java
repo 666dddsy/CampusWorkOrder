@@ -36,6 +36,490 @@ public class TicketServiceIntegrationTest {
     private TicketLogMapper ticketLogMapper;
 
     @Test
+    void selectTicketByIdWithAllRole_shouldSucceed(){
+        String suffix = String.valueOf(System.nanoTime());
+
+        String requesterUsername = "assign_requester_" + suffix;
+        String adminUsername = "assign_admin_" + suffix;
+        String workerUsername = "assign_worker_" + suffix;
+        String ticketTitle = "assign_ticket_" + suffix;
+
+        Long requesterId = null;
+        Long adminId = null;
+        Long workerId = null;
+        Long ticketId = null;
+
+        try {
+            jdbcTemplate.update(
+                    """
+                        insert into app_user (username,password_hash,role)
+                        values(?,?,?)
+                        """,
+                    requesterUsername,"test_hash", "REQUESTER"
+            );
+            jdbcTemplate.update(
+                    """
+                        insert into app_user (username,password_hash,role)
+                        values(?,?,?)
+                        """,
+                    adminUsername,"test_hash", "ADMIN"
+            );
+            jdbcTemplate.update(
+                    """
+                        insert into app_user (username,password_hash,role)
+                        values(?,?,?)
+                        """,
+                    workerUsername,"test_hash", "WORKER"
+            );
+            requesterId=jdbcTemplate.queryForObject(
+                    """
+                            select id from app_user where username=?
+                            """,
+                    Long.class,
+                    requesterUsername
+            );
+            adminId=jdbcTemplate.queryForObject(
+                    """
+                            select id from app_user where username=?
+                            """,
+                    Long.class,
+                    adminUsername
+            );
+            workerId=jdbcTemplate.queryForObject(
+                    """
+                            select id from app_user where username=?
+                            """,
+                    Long.class,
+                    workerUsername
+            );
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO ticket
+                    (
+                        creator_id,
+                        assignee_id,
+                        title,
+                        description,
+                        location,
+                        category,
+                        priority,
+                        status
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    requesterId,
+                    workerId,
+                    ticketTitle,
+                    "验证管理员分配工单",
+                    "测试地点",
+                    "NETWORK",
+                    "HIGH",
+                    "ASSIGNED"
+            );
+            ticketId=jdbcTemplate.queryForObject(
+                    """
+                            select id from ticket where creator_id=? and title=?
+                            """,
+                    Long.class,
+                    requesterId,
+                    ticketTitle
+            );
+            Ticket requesterResult=ticketService.selectByIdWithRole(ticketId,requesterId);
+            Ticket adminResult=ticketService.selectByIdWithRole(ticketId,adminId);
+            Ticket workerResult=ticketService.selectByIdWithRole(ticketId,workerId);
+            assertNotNull(requesterResult);
+            assertNotNull(adminResult);
+            assertNotNull(workerResult);
+            assertEquals(ticketTitle,requesterResult.getTitle());
+            assertEquals(ticketTitle,adminResult.getTitle());
+            assertEquals(ticketTitle,workerResult.getTitle());
+
+        } finally {
+            // 下一步再写清理
+            if (ticketId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM ticket_log WHERE ticket_id = ?",
+                        ticketId
+                );
+
+                jdbcTemplate.update(
+                        "DELETE FROM ticket WHERE id = ?",
+                        ticketId
+                );
+            }
+
+            if (adminId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id = ?",
+                        adminId
+                );
+            }
+
+            if (workerId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id = ?",
+                        workerId
+                );
+            }
+
+            if (requesterId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id = ?",
+                        requesterId
+                );
+            }
+        }
+    }
+    @Test
+    void selectTicketByIdWithAllRole_shouldFail(){
+        String suffix = String.valueOf(System.nanoTime());
+
+        String requesterUsername = "assign_requester_" + suffix;
+        String otherRequesterUsername = "assign_other_requester_" + suffix;
+        String workerUsername = "assign_worker_" + suffix;
+        String otherWorkerUsername = "assign_other_worker_" + suffix;
+        String ticketTitle = "assign_ticket_" + suffix;
+
+        Long missingUserId=0L;
+        Long requesterId = null;
+        Long otherRequesterId=null;
+        Long workerId = null;
+        Long otherWorkerId=null;
+        Long ticketId = null;
+        Long missingTicketId=0L;
+
+        try {
+            jdbcTemplate.update(
+                    """
+                        insert into app_user (username,password_hash,role)
+                        values(?,?,?)
+                        """,
+                    requesterUsername,"test_hash", "REQUESTER"
+            );
+            jdbcTemplate.update(
+                    """
+                        insert into app_user (username,password_hash,role)
+                        values(?,?,?)
+                        """,
+                    otherRequesterUsername,"test_hash", "REQUESTER"
+            );
+            jdbcTemplate.update(
+                    """
+                        insert into app_user (username,password_hash,role)
+                        values(?,?,?)
+                        """,
+                    workerUsername,"test_hash", "WORKER"
+            );
+            jdbcTemplate.update(
+                    """
+                        insert into app_user (username,password_hash,role)
+                        values(?,?,?)
+                        """,
+                    otherWorkerUsername,"test_hash", "WORKER"
+            );
+            requesterId=jdbcTemplate.queryForObject(
+                    """
+                            select id from app_user where username=?
+                            """,
+                    Long.class,
+                    requesterUsername
+            );
+            otherRequesterId=jdbcTemplate.queryForObject(
+                    """
+                            select id from app_user where username=?
+                            """,
+                    Long.class,
+                    otherRequesterUsername
+            );
+
+            workerId=jdbcTemplate.queryForObject(
+                    """
+                            select id from app_user where username=?
+                            """,
+                    Long.class,
+                    workerUsername
+            );
+            otherWorkerId=jdbcTemplate.queryForObject(
+                    """
+                            select id from app_user where username=?
+                            """,
+                    Long.class,
+                    otherWorkerUsername
+            );
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO ticket
+                    (
+                        creator_id,
+                        assignee_id,
+                        title,
+                        description,
+                        location,
+                        category,
+                        priority,
+                        status
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    requesterId,
+                    workerId,
+                    ticketTitle,
+                    "验证管理员分配工单",
+                    "测试地点",
+                    "NETWORK",
+                    "HIGH",
+                    "ASSIGNED"
+            );
+            ticketId=jdbcTemplate.queryForObject(
+                    """
+                            select id from ticket where creator_id=? and title=?
+                            """,
+                    Long.class,
+                    requesterId,
+                    ticketTitle
+            );
+            Long finalOtherRequesterId = otherRequesterId;
+            Long finalOtherWorkerId = otherWorkerId;
+            Long finalTicketId = ticketId;
+            BusinessException exception1=assertThrows(
+                    BusinessException.class,()->ticketService.selectByIdWithRole(finalTicketId, finalOtherRequesterId)
+            );
+            BusinessException exception2=assertThrows(
+                    BusinessException.class,()->ticketService.selectByIdWithRole(finalTicketId, finalOtherWorkerId)
+            );
+            BusinessException exception3=assertThrows(
+                    BusinessException.class,()->ticketService.selectByIdWithRole(finalTicketId, missingUserId)
+            );
+            BusinessException exception4=assertThrows(
+                    BusinessException.class,()->ticketService.selectByIdWithRole(missingTicketId, missingUserId)
+            );
+            assertEquals(HttpStatus.FORBIDDEN,exception1.getStatus());
+            assertEquals(HttpStatus.FORBIDDEN,exception2.getStatus());
+            assertEquals(HttpStatus.FORBIDDEN,exception3.getStatus());
+            assertEquals(HttpStatus.FORBIDDEN,exception4.getStatus());
+            assertEquals("You don't have right to get the ticket",exception1.getMessage());
+            assertEquals("You don't have right to get the ticket",exception2.getMessage());
+            assertEquals("You don't have right to get the ticket",exception3.getMessage());
+            assertEquals("You don't have right to get the ticket",exception4.getMessage());
+            assertNull(ticketService.selectByIdWithRole(Long.MAX_VALUE, requesterId));
+        }finally {
+            if (ticketId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM ticket_log WHERE ticket_id = ?",
+                        ticketId
+                );
+
+                jdbcTemplate.update(
+                        "DELETE FROM ticket WHERE id = ?",
+                        ticketId
+                );
+            }
+
+            if (workerId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id = ?",
+                        workerId
+                );
+            }
+
+            if (otherWorkerId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id = ?",
+                        otherWorkerId
+                );
+            }
+
+            if (requesterId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id = ?",
+                        requesterId
+                );
+            }
+
+            if (otherRequesterId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id = ?",
+                        otherRequesterId
+                );
+            }
+        }
+    }
+
+    @Test
+    void selectMyAssignedTickets_shouldOnlyReturnCurrentWorkersTickets() {
+        String suffix = String.valueOf(System.nanoTime());
+
+        String requesterUsername = "list_requester_" + suffix;
+        String workerAUsername = "list_worker_a_" + suffix;
+        String workerBUsername = "list_worker_b_" + suffix;
+
+        String aOldTitle = "a_old_" + suffix;
+        String aNewTitle = "a_new_" + suffix;
+        String bTitle = "b_ticket_" + suffix;
+
+        try {
+
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO app_user (username, password_hash, role)
+                    VALUES
+                        (?, ?, ?),
+                        (?, ?, ?),
+                        (?, ?, ?)
+                    """,
+                    requesterUsername, "test_hash", "REQUESTER",
+                    workerAUsername, "test_hash", "WORKER",
+                    workerBUsername, "test_hash", "WORKER"
+            );
+
+            Long requesterId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM app_user WHERE username = ?",
+                    Long.class,
+                    requesterUsername
+            );
+
+            Long workerAId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM app_user WHERE username = ?",
+                    Long.class,
+                    workerAUsername
+            );
+
+            Long workerBId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM app_user WHERE username = ?",
+                    Long.class,
+                    workerBUsername
+            );
+
+            // 2. 准备明确的创建时间，避免依赖插入速度
+            LocalDateTime baseTime =
+                    LocalDateTime.of(2026, 10, 12, 10, 0);
+
+            // 3. 创建三张工单：A 两张、B 一张
+            jdbcTemplate.update(
+                    """
+                    INSERT INTO ticket
+                    (
+                        creator_id,
+                        assignee_id,
+                        title,
+                        description,
+                        location,
+                        category,
+                        priority,
+                        status,
+                        created_at
+                    )
+                    VALUES
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?),
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?),
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+
+                    // A 的旧工单
+                    requesterId,
+                    workerAId,
+                    aOldTitle,
+                    "worker A 旧工单",
+                    "测试地点",
+                    "NETWORK",
+                    "MEDIUM",
+                    "ASSIGNED",
+                    Timestamp.valueOf(baseTime),
+
+                    // A 的新工单
+                    requesterId,
+                    workerAId,
+                    aNewTitle,
+                    "worker A 新工单",
+                    "测试地点",
+                    "NETWORK",
+                    "MEDIUM",
+                    "ASSIGNED",
+                    Timestamp.valueOf(baseTime.plusHours(1)),
+
+                    // B 的工单故意设置为最新
+                    requesterId,
+                    workerBId,
+                    bTitle,
+                    "worker B 工单",
+                    "测试地点",
+                    "NETWORK",
+                    "MEDIUM",
+                    "ASSIGNED",
+                    Timestamp.valueOf(baseTime.plusHours(2))
+            );
+
+            Long aOldTicketId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM ticket WHERE title = ?",
+                    Long.class,
+                    aOldTitle
+            );
+
+            Long aNewTicketId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM ticket WHERE title = ?",
+                    Long.class,
+                    aNewTitle
+            );
+
+            Long workerBTicketId = jdbcTemplate.queryForObject(
+                    "SELECT id FROM ticket WHERE title = ?",
+                    Long.class,
+                    bTitle
+            );
+
+
+            List<Ticket> result =
+                    ticketService.selectMyAssignedTickets(workerAId);
+
+
+            assertEquals(2, result.size());
+
+            assertEquals(workerAId, result.get(0).getAssigneeId());
+            assertEquals(workerAId, result.get(1).getAssigneeId());
+
+
+            assertEquals(aNewTicketId, result.get(0).getId());
+            assertEquals(aOldTicketId, result.get(1).getId());
+
+
+            assertNotEquals(workerBTicketId, result.get(0).getId());
+            assertNotEquals(workerBTicketId, result.get(1).getId());
+
+        } finally {
+            // 先删除可能存在的日志
+            jdbcTemplate.update(
+                    """
+                    DELETE FROM ticket_log
+                    WHERE ticket_id IN
+                    (
+                        SELECT id
+                        FROM ticket
+                        WHERE title IN (?, ?, ?)
+                    )
+                    """,
+                    aOldTitle,
+                    aNewTitle,
+                    bTitle
+            );
+
+            // 再删除本轮创建的三张工单
+            jdbcTemplate.update(
+                    "DELETE FROM ticket WHERE title IN (?, ?, ?)",
+                    aOldTitle,
+                    aNewTitle,
+                    bTitle
+            );
+
+            // 最后删除本轮创建的三个用户
+            jdbcTemplate.update(
+                    "DELETE FROM app_user WHERE username IN (?, ?, ?)",
+                    requesterUsername,
+                    workerAUsername,
+                    workerBUsername
+            );
+        }
+    }
+    @Test
     void createTicket_shouldInsertTicketAndLog(){
         String username = "test_requester_" + System.nanoTime();
         Long creatorId = null;
@@ -101,6 +585,120 @@ public class TicketServiceIntegrationTest {
                 jdbcTemplate.update(
                         "DELETE FROM app_user WHERE id = ?",
                         creatorId
+                );
+            }
+        }
+    }
+    @Test
+    void createTicket_withNonRequester_shouldReturn403AndInsertNothing(){
+        String suffix = String.valueOf(System.nanoTime());
+
+        String adminUsername = "assign_admin_" + suffix;
+        String workerUsername = "assign_worker_" + suffix;
+
+        Long ticketId = null;
+        Long adminId = null;
+        Long workerId = null;
+        Long missingUserId=0L;
+
+        try {
+            jdbcTemplate.update(
+                    """
+                        insert into app_user (username,password_hash,role)
+                        values(?,?,?)
+                        """,
+                    adminUsername,"test_hash", "ADMIN"
+            );
+            jdbcTemplate.update(
+                    """
+                        insert into app_user (username,password_hash,role)
+                        values(?,?,?)
+                        """,
+                    workerUsername,"test_hash", "WORKER"
+            );
+            adminId=jdbcTemplate.queryForObject(
+                    """
+                            select id from app_user where username=?
+                            """,
+                    Long.class,
+                    adminUsername
+            );
+            workerId=jdbcTemplate.queryForObject(
+                    """
+                            select id from app_user where username=?
+                            """,
+                    Long.class,
+                    workerUsername
+            );
+            int ticketBeforeCount=jdbcTemplate.queryForObject(
+                    """
+                            SELECT COUNT(created_at) from ticket
+                            """,
+                    int.class
+            );
+            int ticketLogBeforeCount=jdbcTemplate.queryForObject(
+                    """
+                            SELECT COUNT(created_at) from ticket_log
+                            """,
+                    int.class
+            );
+            TicketCreateRequest request=new TicketCreateRequest();
+            request.setTitle("集成测试工单");
+            request.setDescription("验证创建工单和日志是否同时写入");
+            request.setLocation("测试地点");
+            request.setCategory(TicketCategory.NETWORK);
+            request.setPriority(TicketPriority.HIGH);
+            Long finalAdminId = adminId;
+            Long finalWorkerId = workerId;
+            BusinessException exception1=assertThrows(BusinessException.class,()->ticketService.createTicket(finalAdminId,request));
+            BusinessException exception2=assertThrows(BusinessException.class,()->ticketService.createTicket(finalWorkerId,request));
+            BusinessException exception3=assertThrows(BusinessException.class,()->ticketService.createTicket(missingUserId,request));
+            int ticketAfterCount=jdbcTemplate.queryForObject(
+                    """
+                            SELECT COUNT(*) from ticket
+                            """,
+                    int.class
+            );
+            int ticketLogAfterCount=jdbcTemplate.queryForObject(
+                    """
+                            SELECT COUNT(*) from ticket_log
+                            """,
+                    int.class
+            );
+            assertEquals(HttpStatus.FORBIDDEN,exception1.getStatus());
+            assertEquals(HttpStatus.FORBIDDEN,exception2.getStatus());
+            assertEquals(HttpStatus.FORBIDDEN,exception3.getStatus());
+            assertEquals("You are not Requester",exception1.getMessage());
+            assertEquals("You are not Requester",exception2.getMessage());
+            assertEquals("You are not Requester",exception3.getMessage());
+            assertEquals(ticketBeforeCount,ticketAfterCount);
+            assertEquals(ticketLogBeforeCount,ticketLogAfterCount);
+
+        } finally {
+            // 下一步再写清理
+            if (ticketId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM ticket_log WHERE ticket_id = ?",
+                        ticketId
+                );
+
+                jdbcTemplate.update(
+                        "DELETE FROM ticket WHERE id = ?",
+                        ticketId
+                );
+            }
+
+            if (adminId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id = ?",
+                        adminId
+                );
+            }
+
+            if (workerId != null) {
+                jdbcTemplate.update(
+                        "DELETE FROM app_user WHERE id = ?",
+                        workerId
                 );
             }
         }
@@ -393,180 +991,6 @@ public class TicketServiceIntegrationTest {
                         requesterId
                 );
             }
-        }
-    }
-    @Test
-    void selectMyAssignedTickets_shouldOnlyReturnCurrentWorkersTickets() {
-        String suffix = String.valueOf(System.nanoTime());
-
-        String requesterUsername = "list_requester_" + suffix;
-        String workerAUsername = "list_worker_a_" + suffix;
-        String workerBUsername = "list_worker_b_" + suffix;
-
-        String aOldTitle = "a_old_" + suffix;
-        String aNewTitle = "a_new_" + suffix;
-        String bTitle = "b_ticket_" + suffix;
-
-        try {
-
-            jdbcTemplate.update(
-                    """
-                    INSERT INTO app_user (username, password_hash, role)
-                    VALUES
-                        (?, ?, ?),
-                        (?, ?, ?),
-                        (?, ?, ?)
-                    """,
-                    requesterUsername, "test_hash", "REQUESTER",
-                    workerAUsername, "test_hash", "WORKER",
-                    workerBUsername, "test_hash", "WORKER"
-            );
-
-            Long requesterId = jdbcTemplate.queryForObject(
-                    "SELECT id FROM app_user WHERE username = ?",
-                    Long.class,
-                    requesterUsername
-            );
-
-            Long workerAId = jdbcTemplate.queryForObject(
-                    "SELECT id FROM app_user WHERE username = ?",
-                    Long.class,
-                    workerAUsername
-            );
-
-            Long workerBId = jdbcTemplate.queryForObject(
-                    "SELECT id FROM app_user WHERE username = ?",
-                    Long.class,
-                    workerBUsername
-            );
-
-            // 2. 准备明确的创建时间，避免依赖插入速度
-            LocalDateTime baseTime =
-                    LocalDateTime.of(2026, 10, 12, 10, 0);
-
-            // 3. 创建三张工单：A 两张、B 一张
-            jdbcTemplate.update(
-                    """
-                    INSERT INTO ticket
-                    (
-                        creator_id,
-                        assignee_id,
-                        title,
-                        description,
-                        location,
-                        category,
-                        priority,
-                        status,
-                        created_at
-                    )
-                    VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?),
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?),
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-
-                    // A 的旧工单
-                    requesterId,
-                    workerAId,
-                    aOldTitle,
-                    "worker A 旧工单",
-                    "测试地点",
-                    "NETWORK",
-                    "MEDIUM",
-                    "ASSIGNED",
-                    Timestamp.valueOf(baseTime),
-
-                    // A 的新工单
-                    requesterId,
-                    workerAId,
-                    aNewTitle,
-                    "worker A 新工单",
-                    "测试地点",
-                    "NETWORK",
-                    "MEDIUM",
-                    "ASSIGNED",
-                    Timestamp.valueOf(baseTime.plusHours(1)),
-
-                    // B 的工单故意设置为最新
-                    requesterId,
-                    workerBId,
-                    bTitle,
-                    "worker B 工单",
-                    "测试地点",
-                    "NETWORK",
-                    "MEDIUM",
-                    "ASSIGNED",
-                    Timestamp.valueOf(baseTime.plusHours(2))
-            );
-
-            Long aOldTicketId = jdbcTemplate.queryForObject(
-                    "SELECT id FROM ticket WHERE title = ?",
-                    Long.class,
-                    aOldTitle
-            );
-
-            Long aNewTicketId = jdbcTemplate.queryForObject(
-                    "SELECT id FROM ticket WHERE title = ?",
-                    Long.class,
-                    aNewTitle
-            );
-
-            Long workerBTicketId = jdbcTemplate.queryForObject(
-                    "SELECT id FROM ticket WHERE title = ?",
-                    Long.class,
-                    bTitle
-            );
-
-
-            List<Ticket> result =
-                    ticketService.selectMyAssignedTickets(workerAId);
-
-
-            assertEquals(2, result.size());
-
-            assertEquals(workerAId, result.get(0).getAssigneeId());
-            assertEquals(workerAId, result.get(1).getAssigneeId());
-
-
-            assertEquals(aNewTicketId, result.get(0).getId());
-            assertEquals(aOldTicketId, result.get(1).getId());
-
-
-            assertNotEquals(workerBTicketId, result.get(0).getId());
-            assertNotEquals(workerBTicketId, result.get(1).getId());
-
-        } finally {
-            // 先删除可能存在的日志
-            jdbcTemplate.update(
-                    """
-                    DELETE FROM ticket_log
-                    WHERE ticket_id IN
-                    (
-                        SELECT id
-                        FROM ticket
-                        WHERE title IN (?, ?, ?)
-                    )
-                    """,
-                    aOldTitle,
-                    aNewTitle,
-                    bTitle
-            );
-
-            // 再删除本轮创建的三张工单
-            jdbcTemplate.update(
-                    "DELETE FROM ticket WHERE title IN (?, ?, ?)",
-                    aOldTitle,
-                    aNewTitle,
-                    bTitle
-            );
-
-            // 最后删除本轮创建的三个用户
-            jdbcTemplate.update(
-                    "DELETE FROM app_user WHERE username IN (?, ?, ?)",
-                    requesterUsername,
-                    workerAUsername,
-                    workerBUsername
-            );
         }
     }
     @Test

@@ -21,8 +21,8 @@ public class TicketController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<TicketResponse> selectById(@PathVariable Long id){
-        Ticket ticket=ticketService.selectById(id);
+    public ResponseEntity<TicketResponse> selectById(@PathVariable Long id,@RequestHeader("X-User-Id") Long userId){
+        Ticket ticket=ticketService.selectByIdWithRole(id,userId);
         if (ticket==null)
             return ResponseEntity.notFound()
                     .build();
