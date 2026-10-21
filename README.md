@@ -22,7 +22,7 @@ CampusWorkOrder 是一个基于 Spring Boot、MyBatis 和 MySQL 实现的校园�
 CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 ```
 
-管理员分页列表及状态、创建人、维修人员筛选已经实现；后续将继续完善索引验证、正式身份认证、接口文档和部署。
+管理员分页筛选、业务权限边界和 Spring Security 最小认证过滤链已经实现；后续将把认证主体连接到数据库用户，移除对客户端自填用户 ID 的信任，并继续完善接口文档和部署。
 
 ---
 
@@ -40,6 +40,7 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 - 工单创建人确认问题已经解决，将工单从 `RESOLVED` 改为 `CLOSED`。
 - `REQUESTER`、`WORKER` 和 `ADMIN` 的基础角色校验。
 - 工单创建人和当前维修人员的数据归属校验。
+- Spring Security 最小认证过滤链：所有请求必须先通过 HTTP Basic 认证才能进入 Controller。
 - 请求参数校验和字段级错误响应。
 - 业务异常的统一处理。
 - 创建、分配、开始处理、提交维修结果和关闭工单的事务一致性。
@@ -53,7 +54,7 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 
 尚未实现：
 
-- Spring Security、JWT 和正式登录认证。
+- 数据库用户登录、密码哈希验证、JWT 和正式身份认证。
 - 统一业务错误码。
 - OpenAPI/Swagger 接口文档。
 - 生产环境部署。
@@ -113,7 +114,25 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 | `WORKER` | 查看被分配的工单、开始处理、提交维修结果 | 已实现 |
 | `ADMIN` | 查看任意工单详情、分配维修人员、分页和筛选查看全部工单 | 已实现 |
 
-当前没有实现 Spring Security、JWT 或正式登录功能。
+当前已经接入 Spring Security 最小认证骨架：所有请求必须先通过 HTTP Basic，未认证请求在进入 Controller 前返回 `401 Unauthorized`。
+
+当前 HTTP Basic 使用 Spring Boot 启动时生成的临时开发用户和密码，仅用于验证过滤链。临时密码只从本次启动日志读取，不写入源码、README 或 Git；应用重启后可能变化。
+
+以下 README 中的所有 curl 示例，在当前阶段都需要额外添加：
+
+```powershell
+-u "user:<本次启动日志中的临时密码>"
+```
+
+例如：
+
+```powershell
+curl.exe -i -u "user:<本次启动日志中的临时密码>" `
+  -H "X-User-Id: 4" `
+  "http://localhost:8080/tickets"
+```
+
+HTTP Basic 通过后，接口仍暂时通过请求头传递业务用户 ID：
 
 接口暂时通过请求头传递用户 ID：
 
@@ -121,7 +140,7 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 X-User-Id: 1
 ```
 
-`X-User-Id` 只是开发阶段用于打通业务链路的临时身份参数，可以由客户端自行填写，不能视为真正的身份认证。
+`X-User-Id` 只是开发阶段用于打通业务链路的临时身份参数，可以由客户端自行填写。当前 HTTP Basic 用户与该 ID 没有关联，因此通过 Basic 后仍可伪造其他用户 ID，不能视为真正的身份认证。
 
 当前角色查询只能证明：
 
@@ -135,7 +154,7 @@ X-User-Id: 1
 请求发送者真实拥有这个用户 ID
 ```
 
-正式认证将在后续接入 Spring Security 后实现。
+下一阶段将把 Spring Security 认证主体连接到 `app_user`，使用 `PasswordEncoder` 验证密码，并从认证上下文取得业务用户 ID，逐步移除对客户端自填 `X-User-Id` 的信任。
 
 即使接入正式认证，Service 中的数据归属校验仍需要保留。例如：
 
@@ -1494,18 +1513,18 @@ updatedAt
 mvn test
 ```
 
-当前源码共有 **68 条测试**：
+当前源码共有 **70 条测试**：
 
-- 38 条 `TicketController` MockMvc 测试。
+- 40 条 `TicketController` MockMvc 测试。
 - 24 条 Service 真实数据库集成测试。
 - 5 条事务失败回滚测试。
 - 1 条 Spring 上下文启动测试。
 
-提交前应由用户在本机执行一次完整 `mvn test`，确认当前 68 条测试全部通过。
+用户已在本机执行完整 `mvn test`，确认当前 70 条测试全部通过。
 
 ### Controller 测试
 
-当前共有 38 条 Controller MockMvc 测试：
+当前共有 40 条 Controller MockMvc 测试：
 
 1. 合法创建请求返回 `201`。
 2. 空标题返回 `400`。
@@ -1545,6 +1564,8 @@ mvn test
 36. 详情 Service 抛出权限异常时返回 `403` 和对应 message。
 37. 详情缺少 `X-User-Id` 时返回 `400`，且不调用 Service。
 38. 非 `REQUESTER` 创建工单时返回 `403` 和对应 message。
+39. 未认证访问接口时由 SecurityFilterChain 返回 `401`，且不调用 Service。
+40. 模拟认证并携带现有 `X-User-Id` 时能够越过过滤链，进入 Controller 并返回 `200`。
 
 Controller 测试使用模拟的 Service，不连接真实数据库，主要验证：
 
@@ -1656,13 +1677,15 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - [x] 实现管理员列表的状态、创建人和维修人员筛选
 - [x] 保证 COUNT 与分页列表复用同一动态 WHERE 条件
 - [x] 完成筛选的单条件、组合条件、空结果和跨页测试
-- [x] 完成 38 条 Controller MockMvc 测试
+- [x] 完成 40 条 Controller MockMvc 测试
 - [x] 完成 24 条 Service 真实数据库集成测试
 - [x] 完成 5 条事务失败回滚测试
 - [x] 完成核心工单状态流闭环
 - [x] 修复工单详情接口的越权查询问题
 - [x] 限制只有 `REQUESTER` 可以创建工单
-- [ ] 实现正式登录和权限认证
+- [x] 接入 Spring Security 最小 HTTP Basic 认证过滤链
+- [ ] 将认证主体连接到数据库用户并移除对客户端自填 `X-User-Id` 的信任
+- [ ] 实现密码哈希验证和正式登录认证
 - [x] 使用当前小数据量完成分页筛选查询和索引的初步 EXPLAIN
 - [ ] 使用更大且接近真实分布的数据复测分页筛选查询和索引
 - [ ] 增加统一业务错误码
@@ -1675,8 +1698,9 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 
 当前版本存在以下明确限制：
 
-- `X-User-Id` 可以被客户端伪造，不是真正的身份认证。
-- 当前角色和资源归属校验依赖客户端提供的临时用户 ID，不能防止身份冒用。
+- 当前 HTTP Basic 只使用 Spring Boot 临时开发用户，尚未查询 `app_user` 或验证数据库密码哈希。
+- HTTP Basic 主体和 `X-User-Id` 没有关联；客户端通过 Basic 后仍可伪造业务用户 ID。
+- 当前角色和资源归属校验仍依赖客户端提供的临时用户 ID，不能防止身份冒用。
 - 管理员列表已完成当前约 6 行小表的初步 EXPLAIN，但结果不能代表大数据量下的索引选择。
 - 状态更新使用条件更新进行基础并发保护，但尚未实现版本号或完整的乐观锁机制。
 - 尚未实现统一的业务错误码。
@@ -1710,7 +1734,8 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 状态流闭环（已完成）
 → 列表筛选与小表 EXPLAIN（已完成）
 → 临时身份下的详情与创建权限（已完成）
-→ 正式身份认证
+→ Spring Security 最小认证过滤链（已完成）
+→ 数据库用户认证和业务身份绑定
 → 接口文档和工程完善
 → Docker 与部署
 ```
@@ -1721,7 +1746,7 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 
 后续按照以下顺序继续开发：
 
-1. 接入 Spring Security 和正式登录认证，移除对客户端自填 `X-User-Id` 的信任。
+1. 将 Spring Security 认证主体连接到 `app_user`，使用 `PasswordEncoder` 验证密码，并移除对客户端自填 `X-User-Id` 的信任。
 2. 使用更大且接近真实分布的数据复测筛选、排序和索引选择。
 3. 增加统一业务错误码。
 4. 增加 OpenAPI/Swagger 接口文档。

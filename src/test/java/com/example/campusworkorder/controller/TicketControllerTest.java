@@ -1,5 +1,6 @@
 package com.example.campusworkorder.controller;
 
+import com.example.campusworkorder.config.SecurityConfig;
 import com.example.campusworkorder.domain.enums.TicketCategory;
 import com.example.campusworkorder.domain.enums.TicketPriority;
 import com.example.campusworkorder.domain.enums.TicketStatus;
@@ -10,8 +11,11 @@ import com.example.campusworkorder.service.TicketService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithAnonymousUser;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,6 +31,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(TicketController.class)
+@Import(SecurityConfig.class)
+@WithMockUser(roles = "ADMIN")
 public class TicketControllerTest {
     @Autowired
     private MockMvc mockMvc;
@@ -747,5 +753,31 @@ public class TicketControllerTest {
                         .param("assigneeId","-1"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(ticketService);
+    }
+
+    @Test
+    @WithAnonymousUser
+    void security_withoutAuthentication_shouldReturn401() throws Exception{
+        mockMvc.perform(get("/tickets/101")
+                        .header("X-User-Id","4"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(ticketService);
+    }
+    @Test
+    void security_withAuthentication_shouldReturn200() throws Exception{
+        when(ticketService.selectByIdWithRole(101L, 4L))
+                .thenReturn(exampleTicket());
+        mockMvc.perform(get("/tickets/101")
+                        .header("X-User-Id","4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(101))
+                .andExpect(jsonPath("$.creatorId").value(12))
+                .andExpect(jsonPath("$.assigneeId").value(nullValue()))
+                .andExpect(jsonPath("$.title").value("宿舍水管漏水"))
+                .andExpect(jsonPath("$.category").value("PLUMBING"))
+                .andExpect(jsonPath("$.priority").value("MEDIUM"))
+                .andExpect(jsonPath("$.status").value("CREATED"))
+                .andExpect(jsonPath("$.createdAt").exists());
+        verify(ticketService).selectByIdWithRole(101L,4L);
     }
 }
