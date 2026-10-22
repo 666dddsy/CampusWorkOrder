@@ -4,9 +4,11 @@ import com.example.campusworkorder.config.SecurityConfig;
 import com.example.campusworkorder.domain.enums.TicketCategory;
 import com.example.campusworkorder.domain.enums.TicketPriority;
 import com.example.campusworkorder.domain.enums.TicketStatus;
+import com.example.campusworkorder.domain.enums.UserRole;
 import com.example.campusworkorder.dto.*;
 import com.example.campusworkorder.entity.Ticket;
 import com.example.campusworkorder.exception.BusinessException;
+import com.example.campusworkorder.security.AppUserPrincipal;
 import com.example.campusworkorder.service.TicketService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +29,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -78,7 +81,7 @@ public class TicketControllerTest {
         when(ticketService.selectById(eq(101L)))
                 .thenReturn(ticket);
         mockMvc.perform(post("/tickets")
-                .header("X-User-Id", "12")
+                .with(user(new AppUserPrincipal(12L, "student_001", "x", UserRole.REQUESTER)))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                                 {
@@ -110,7 +113,7 @@ public class TicketControllerTest {
     @Test
     void createTicket_withBlankTitle_shouldReturn400()throws Exception{
         mockMvc.perform(post("/tickets")
-                .header("X-User-Id", "12")
+                        .with(user(new AppUserPrincipal(12L, "student_001", "x", UserRole.REQUESTER)))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                                 {
@@ -126,7 +129,8 @@ public class TicketControllerTest {
         verifyNoInteractions(ticketService);
     }
     @Test
-    void createTicket_withoutHeader_shouldReturn400()throws Exception{
+    @WithAnonymousUser
+    void createTicket_withoutUserAndPassword_shouldReturn401()throws Exception{
         mockMvc.perform(post("/tickets")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
@@ -138,13 +142,13 @@ public class TicketControllerTest {
                                   "priority": "MEDIUM"
                                 }
                                 """))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(ticketService);
     }
     @Test
     void createTicket_withWrongCategory_shouldReturn400()throws Exception{
         mockMvc.perform(post("/tickets")
-                .header("X-User-Id", "12")
+                        .with(user(new AppUserPrincipal(12L, "student_001", "x", UserRole.REQUESTER)))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                                 {
@@ -163,7 +167,7 @@ public class TicketControllerTest {
         when(ticketService.createTicket(eq(4L),any(TicketCreateRequest.class)))
                 .thenThrow(new BusinessException(HttpStatus.FORBIDDEN,"You are not Requester"));
         mockMvc.perform(post("/tickets")
-                        .header("X-User-Id", "4")
+                        .with(user(new AppUserPrincipal(4L, "student_001", "x", UserRole.REQUESTER)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -184,7 +188,7 @@ public class TicketControllerTest {
         when(ticketService.selectByIdWithRole(101L,12L))
                 .thenReturn(ticket);
         mockMvc.perform(get("/tickets/101")
-                        .header("X-User-Id","12"))
+                        .with(user(new AppUserPrincipal(12L, "student_001", "x", UserRole.REQUESTER))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(101))
                 .andExpect(jsonPath("$.creatorId").value(12))
@@ -201,7 +205,7 @@ public class TicketControllerTest {
         when(ticketService.selectByIdWithRole(any(Long.class),eq(4L)))
                 .thenReturn(null);
         mockMvc.perform(get("/tickets/1")
-                        .header("X-User-Id","4"))
+                        .with(user(new AppUserPrincipal(4L, "admin_001", "x", UserRole.ADMIN))))
                 .andExpect(status().isNotFound());
         verify(ticketService).selectByIdWithRole(1L,4L);
     }
@@ -210,15 +214,16 @@ public class TicketControllerTest {
         when(ticketService.selectByIdWithRole(eq(13L),eq(2L)))
                 .thenThrow(new BusinessException(HttpStatus.FORBIDDEN,"You don't have right to get the ticket"));
         mockMvc.perform(get("/tickets/13")
-                .header("X-User-Id","2"))
+                .with(user(new AppUserPrincipal(2L, "worker_001", "x", UserRole.WORKER))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.message").value("You don't have right to get the ticket"));
         verify(ticketService).selectByIdWithRole(eq(13L),eq(2L));
     }
     @Test
-    void selectByIdWithRole_withNonHeader_shouldReturn400()throws Exception{
+    @WithAnonymousUser
+    void selectByIdWithRole_withNonHeader_shouldReturn401()throws Exception{
         mockMvc.perform(get("/tickets/1"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(ticketService);
     }
 
@@ -768,7 +773,7 @@ public class TicketControllerTest {
         when(ticketService.selectByIdWithRole(101L, 4L))
                 .thenReturn(exampleTicket());
         mockMvc.perform(get("/tickets/101")
-                        .header("X-User-Id","4"))
+                        .with(user(new AppUserPrincipal(4L, "student_001", "x", UserRole.REQUESTER))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(101))
                 .andExpect(jsonPath("$.creatorId").value(12))
@@ -779,5 +784,37 @@ public class TicketControllerTest {
                 .andExpect(jsonPath("$.status").value("CREATED"))
                 .andExpect(jsonPath("$.createdAt").exists());
         verify(ticketService).selectByIdWithRole(101L,4L);
+    }
+
+    @Test
+    void selectById_withForgedHeader_shouldUsePrincipalId() throws Exception {
+        when(ticketService.selectByIdWithRole(101L, 12L)).thenReturn(exampleTicket());
+
+        mockMvc.perform(get("/tickets/101")
+                        .header("X-User-Id", "4")          // 伪造
+                        .with(user(new AppUserPrincipal(12L, "student_001", "x", UserRole.REQUESTER))))
+                .andExpect(status().isOk());
+
+        verify(ticketService).selectByIdWithRole(101L, 12L);      // 用的是 principal 的 12
+        verify(ticketService, never()).selectByIdWithRole(101L, 4L);
+    }
+    @Test
+    void createTicket_withForgedHeader_shouldUsePrincipalId() throws Exception {
+        when(ticketService.createTicket(eq(12L), any(TicketCreateRequest.class)))
+                .thenReturn(101L);
+        when(ticketService.selectById(101L)).thenReturn(exampleTicket());
+
+        mockMvc.perform(post("/tickets")
+                        .header("X-User-Id", "4")          // 伪造
+                        .with(user(new AppUserPrincipal(12L, "student_001", "x", UserRole.REQUESTER)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {"title":"伪造头测试","description":"d","location":"l",
+                             "category":"OTHER","priority":"LOW"}
+                            """))
+                .andExpect(status().isCreated());
+
+        verify(ticketService).createTicket(eq(12L), any(TicketCreateRequest.class));
+        verify(ticketService, never()).createTicket(eq(4L), any(TicketCreateRequest.class));
     }
 }

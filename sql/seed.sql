@@ -2,16 +2,16 @@ USE campus_work_order;
 
 -- ==================================================
 -- 1. 演示用户
--- 当前未实现登录，因此 password_hash 只是测试占位文本
+-- demo 账号统一密码：campus-demo-2026（仅本地演示，禁止复用到任何真实账号）
 -- ==================================================
 
 INSERT INTO app_user
 (id, username, password_hash, role, created_at)
 VALUES
-    (1, 'student_001', 'demo_hash_not_for_login', 'REQUESTER', '2026-10-06 09:00:00'),
-    (2, 'student_002', 'demo_hash_not_for_login', 'REQUESTER', '2026-10-06 09:01:00'),
-    (3, 'worker_001',  'demo_hash_not_for_login', 'WORKER',    '2026-10-06 09:02:00'),
-    (4, 'admin_001',   'demo_hash_not_for_login', 'ADMIN',     '2026-10-06 09:03:00');
+    (1, 'student_001', '{bcrypt}$2a$10$POdF4LnBu2p1rcFUA0z/7eQSIlQDVA4wrjm7YI/IEPPcOPAfUwZFi', 'REQUESTER', '2026-10-06 09:00:00'),
+    (2, 'student_002', '{bcrypt}$2a$10$POdF4LnBu2p1rcFUA0z/7eQSIlQDVA4wrjm7YI/IEPPcOPAfUwZFi', 'REQUESTER', '2026-10-06 09:01:00'),
+    (3, 'worker_001',  '{bcrypt}$2a$10$POdF4LnBu2p1rcFUA0z/7eQSIlQDVA4wrjm7YI/IEPPcOPAfUwZFi', 'WORKER',    '2026-10-06 09:02:00'),
+    (4, 'admin_001',   '{bcrypt}$2a$10$POdF4LnBu2p1rcFUA0z/7eQSIlQDVA4wrjm7YI/IEPPcOPAfUwZFi', 'ADMIN',     '2026-10-06 09:03:00');
 
 
 -- ==================================================
@@ -223,5 +223,4 @@ WHERE worker.role = 'WORKER'
   AND t.status IN ('ASSIGNED', 'PROCESSING')
 ORDER BY t.created_at ASC, t.id ASC;
 
-SHOW CREATE TABLE ticket
-
+SHOW CREATE TABLE ticket;

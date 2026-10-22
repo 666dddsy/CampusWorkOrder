@@ -2,10 +2,12 @@ package com.example.campusworkorder.controller;
 
 import com.example.campusworkorder.dto.*;
 import com.example.campusworkorder.entity.Ticket;
+import com.example.campusworkorder.security.AppUserPrincipal;
 import com.example.campusworkorder.service.TicketService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
@@ -21,8 +23,11 @@ public class TicketController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<TicketResponse> selectById(@PathVariable Long id,@RequestHeader("X-User-Id") Long userId){
-        Ticket ticket=ticketService.selectByIdWithRole(id,userId);
+    public ResponseEntity<TicketResponse> selectById(
+            @PathVariable Long id,
+            @AuthenticationPrincipal AppUserPrincipal principal
+            ){
+        Ticket ticket=ticketService.selectByIdWithRole(id,principal.getId());
         if (ticket==null)
             return ResponseEntity.notFound()
                     .build();
@@ -77,9 +82,10 @@ public class TicketController {
 
     @PostMapping
     public ResponseEntity<TicketResponse> createTicket(
-            @RequestHeader("X-User-Id") Long creatorId,@Valid @RequestBody TicketCreateRequest ticketCreateRequest
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @Valid @RequestBody TicketCreateRequest ticketCreateRequest
     ){
-        Long ticketId=ticketService.createTicket(creatorId,ticketCreateRequest);
+        Long ticketId=ticketService.createTicket(principal.getId(),ticketCreateRequest);
         Ticket ticket=ticketService.selectById(ticketId);
         TicketResponse ticketResponse=toTicketResponse(ticket);
         return ResponseEntity.status(HttpStatus.CREATED)

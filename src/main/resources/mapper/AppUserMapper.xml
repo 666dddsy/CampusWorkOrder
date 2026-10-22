@@ -11,5 +11,11 @@
         where id=#{id}
     </select>
 
+    <select id="selectByUsername"
+            resultType="com.example.campusworkorder.entity.AppUser">
+        SELECT id, username, password_hash, role
+        FROM app_user
+        WHERE username = #{username}
+    </select>
 
 </mapper>
