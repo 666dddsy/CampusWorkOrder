@@ -39,9 +39,9 @@ public class TicketController {
     }
 
     @GetMapping("/assigned-to-me")
-    public ResponseEntity<List<TicketResponse>> selectMyAssignedTickets(@RequestHeader("X-User-Id") Long currentUserId){
+    public ResponseEntity<List<TicketResponse>> selectMyAssignedTickets(@AuthenticationPrincipal AppUserPrincipal principal){
 
-        List<Ticket> tickets=ticketService.selectMyAssignedTickets(currentUserId);
+        List<Ticket> tickets=ticketService.selectMyAssignedTickets(principal.getId());
         List<TicketResponse> ticketResponse=new ArrayList<>();
         for(Ticket ticket:tickets)
         {
@@ -51,8 +51,8 @@ public class TicketController {
     }
 
     @GetMapping("/mine")
-    public ResponseEntity<List<TicketResponse>> selectMyTickets(@RequestHeader("X-User-Id") Long creatorId){
-        List<Ticket> tickets=ticketService.selectByCreatorId(creatorId);
+    public ResponseEntity<List<TicketResponse>> selectMyTickets(@AuthenticationPrincipal AppUserPrincipal principal){
+        List<Ticket> tickets=ticketService.selectByCreatorId(principal.getId());
         List<TicketResponse> ticketResponse=new ArrayList<>();
         for(Ticket ticket:tickets)
         {
@@ -63,10 +63,10 @@ public class TicketController {
 
     @GetMapping("")
     public PageResult<TicketResponse> selectAllByPage(
-            @RequestHeader("X-User-Id") Long adminId,
+            @AuthenticationPrincipal AppUserPrincipal principal,
             @Valid @ModelAttribute TicketPageQuery ticketPageQuery
             ){
-        PageResult<Ticket> pageResults=ticketService.selectAdminTickets(adminId,ticketPageQuery);
+        PageResult<Ticket> pageResults=ticketService.selectAdminTickets(principal.getId(),ticketPageQuery);
         List<TicketResponse> ticketResponse=new ArrayList<>();
         PageResult<TicketResponse> pageResult=new PageResult<>();
         for(Ticket ticket:pageResults.getItems())
@@ -95,10 +95,10 @@ public class TicketController {
     @PatchMapping("/{id}/assignment")
     public ResponseEntity<TicketResponse> assignTicket(
             @Valid @RequestBody TicketAssignRequest ticketAssignRequest,
-            @RequestHeader("X-User-Id") Long operatorId,
+            @AuthenticationPrincipal AppUserPrincipal principal,
             @PathVariable Long id
             ){
-        Ticket ticket=ticketService.assignTicket(id,operatorId,ticketAssignRequest);
+        Ticket ticket=ticketService.assignTicket(id,principal.getId(),ticketAssignRequest);
         if(ticket==null)
             return ResponseEntity.notFound()
                     .build();
@@ -108,10 +108,10 @@ public class TicketController {
 
     @PatchMapping("/{id}/processing")
     public ResponseEntity<TicketResponse> processTicket(
-            @RequestHeader("X-User-Id") Long assigneeId,
+            @AuthenticationPrincipal AppUserPrincipal principal,
             @PathVariable Long id
     ){
-        Ticket ticket=ticketService.startProcessing(id,assigneeId);
+        Ticket ticket=ticketService.startProcessing(id,principal.getId());
         if(ticket==null)
             return  ResponseEntity.notFound()
                     .build();
@@ -122,10 +122,10 @@ public class TicketController {
     @PatchMapping("/{id}/resolution")
     public ResponseEntity<TicketResponse> resolveTicket(
             @Valid @RequestBody TicketResolveRequest ticketResolveRequest,
-            @RequestHeader("X-User-Id") Long assigneeId,
+            @AuthenticationPrincipal AppUserPrincipal principal,
             @PathVariable Long id
     ){
-        Ticket ticket=ticketService.resolveTicket(id,assigneeId,ticketResolveRequest);
+        Ticket ticket=ticketService.resolveTicket(id,principal.getId(),ticketResolveRequest);
         if(ticket==null)
             return ResponseEntity.notFound()
                     .build();
@@ -135,10 +135,10 @@ public class TicketController {
 
     @PatchMapping("/{id}/closure")
     public ResponseEntity<TicketResponse> closeTicket(
-            @RequestHeader("X-User-Id") Long creatorId,
+            @AuthenticationPrincipal AppUserPrincipal principal,
             @PathVariable Long id
     ){
-        Ticket ticket=ticketService.closeTicket(id,creatorId);
+        Ticket ticket=ticketService.closeTicket(id,principal.getId());
         if(ticket==null)
             return ResponseEntity.notFound()
                     .build();

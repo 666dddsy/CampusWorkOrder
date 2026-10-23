@@ -22,7 +22,7 @@ CampusWorkOrder 是一个基于 Spring Boot、MyBatis 和 MySQL 实现的校园�
 CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 ```
 
-管理员分页筛选、业务权限边界和数据库用户名密码认证已经实现；工单详情与创建接口已从认证 principal 获取用户 ID，剩余接口仍处于 `X-User-Id` 迁移阶段。
+管理员分页筛选、业务权限边界和数据库用户名密码认证已经实现；全部九个业务接口均从认证 principal 获取用户 ID，不再信任客户端自填身份头。
 
 ---
 
@@ -41,7 +41,7 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 - `REQUESTER`、`WORKER` 和 `ADMIN` 的基础角色校验。
 - 工单创建人和当前维修人员的数据归属校验。
 - Spring Security 数据库认证：HTTP Basic 用户名/密码由 `app_user`、`UserDetailsService` 和 `PasswordEncoder` 验证。
-- 工单详情与创建接口从认证 principal 取得业务用户 ID，不再信任客户端填写的 `X-User-Id`。
+- 全部业务接口从认证 principal 取得业务用户 ID，不再信任客户端填写的 `X-User-Id`。
 - 请求参数校验和字段级错误响应。
 - 业务异常的统一处理。
 - 创建、分配、开始处理、提交维修结果和关闭工单的事务一致性。
@@ -55,7 +55,6 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 
 尚未实现：
 
-- 剩余 7 个业务入口的 principal 身份迁移。
 - JWT、刷新令牌和前端登录流程。
 - 统一业务错误码。
 - OpenAPI/Swagger 接口文档。
@@ -141,30 +140,9 @@ curl.exe -i -u "student_001:campus-demo-2026" `
   "http://localhost:8080/tickets/1"
 ```
 
-当前身份迁移状态：
+当前全部九个业务入口均通过 `@AuthenticationPrincipal AppUserPrincipal` 取得数据库用户 ID。客户端即使额外发送伪造的 `X-User-Id`，也不会改变 Controller 传给 Service 的用户 ID。
 
-- `GET /tickets/{id}` 和 `POST /tickets`：只使用 `AppUserPrincipal.id`，不再要求 `X-User-Id`；即使额外发送伪造 header 也会被忽略。
-- 其余 7 个业务入口：已经要求数据库认证，但仍暂时通过请求头传递业务用户 ID：
-
-```http
-X-User-Id: 1
-```
-
-对尚未迁移的接口，`X-User-Id` 仍可由客户端自行填写，HTTP Basic 用户与该 ID 尚未绑定，因此仍存在身份冒用风险。
-
-当前角色查询只能证明：
-
-```text
-数据库中的这个用户 ID 对应某一种角色
-```
-
-但不能证明：
-
-```text
-请求发送者真实拥有这个用户 ID
-```
-
-下一阶段将把剩余接口统一改为从 `AppUserPrincipal` 取得业务用户 ID，彻底移除业务 Controller 对客户端自填 `X-User-Id` 的信任。
+Controller 测试分别覆盖详情、创建、个人列表、管理员分页和状态变更接口的伪造 header 场景，验证业务身份始终来自 principal。未认证请求即使携带 `X-User-Id` 也仍返回 401，身份头不能替代数据库用户名密码认证。
 
 即使接入正式认证，Service 中的数据归属校验仍需要保留。例如：
 
@@ -643,10 +621,9 @@ http://localhost:8080
 
 ```http
 GET /tickets?page=1&pageSize=10
-X-User-Id: 4
 ```
 
-只有 `ADMIN` 可以访问。`page` 默认值为 1，必须大于等于 1；`pageSize` 默认值为 10，范围为 1—100。查询使用数据库 `COUNT(*)`、`LIMIT/OFFSET`，排序固定为 `created_at DESC, id DESC`，因此创建时间相同的工单仍有稳定顺序。
+使用 `ADMIN` 数据库账号完成 HTTP Basic 认证后才能访问。`page` 默认值为 1，必须大于等于 1；`pageSize` 默认值为 10，范围为 1—100。查询使用数据库 `COUNT(*)`、`LIMIT/OFFSET`，排序固定为 `created_at DESC, id DESC`，因此创建时间相同的工单仍有稳定顺序。
 
 支持以下三个可选筛选参数：
 
@@ -660,7 +637,6 @@ X-User-Id: 4
 
 ```http
 GET /tickets?page=1&pageSize=2&status=CLOSED&creatorId=1&assigneeId=3
-X-User-Id: 4
 ```
 
 COUNT 与分页列表复用同一段动态 WHERE 条件，因此 `total` 表示筛选后的总条数。合法但不存在的 creatorId/assigneeId 返回 `200 + items=[] + total=0`；非法枚举或非正数 ID 返回 400。
@@ -822,14 +798,13 @@ curl.exe -i -u "student_001:campus-demo-2026" `
 
 ```http
 GET /tickets/mine
-X-User-Id: 1
 ```
 
 PowerShell 示例：
 
 ```powershell
-curl.exe -i "http://localhost:8080/tickets/mine" `
-  -H "X-User-Id: 1"
+curl.exe -i -u "student_001:campus-demo-2026" `
+  "http://localhost:8080/tickets/mine"
 ```
 
 查询 SQL 根据当前用户 ID 限制：
@@ -865,7 +840,6 @@ ORDER BY created_at DESC, id DESC
 
 ```http
 PATCH /tickets/{id}/assignment
-X-User-Id: 4
 Content-Type: application/json
 ```
 
@@ -880,8 +854,7 @@ Content-Type: application/json
 PowerShell 示例：
 
 ```powershell
-curl.exe -i -X PATCH "http://localhost:8080/tickets/1/assignment" `
-  -H "X-User-Id: 4" `
+curl.exe -i -u "admin_001:campus-demo-2026" -X PATCH "http://localhost:8080/tickets/1/assignment" `
   -H "Content-Type: application/json" `
   -d '{\"assigneeId\":3}'
 ```
@@ -930,14 +903,13 @@ WHERE id = #{ticketId}
 
 ```http
 GET /tickets/assigned-to-me
-X-User-Id: 3
 ```
 
 PowerShell 示例：
 
 ```powershell
-curl.exe -i "http://localhost:8080/tickets/assigned-to-me" `
-  -H "X-User-Id: 3"
+curl.exe -i -u "worker_001:campus-demo-2026" `
+  "http://localhost:8080/tickets/assigned-to-me"
 ```
 
 查询成功时返回：
@@ -977,14 +949,14 @@ curl.exe -i "http://localhost:8080/tickets/assigned-to-me" `
 403 Forbidden
 ```
 
-该接口不接受客户端传入任意 `assigneeId`，而是使用当前请求头中的用户 ID：
+该接口不接受客户端传入任意 `assigneeId`，而是使用认证 principal 中的用户 ID：
 
 ```sql
 WHERE assignee_id = #{assigneeId}
 ORDER BY created_at DESC, id DESC
 ```
 
-这能够实现当前开发阶段的数据范围隔离，但不能代替正式身份认证。
+数据库认证确认当前用户身份，Service 再校验其 `WORKER` 角色并按 assigneeId 限制数据范围。
 
 ---
 
@@ -994,7 +966,6 @@ ORDER BY created_at DESC, id DESC
 
 ```http
 PATCH /tickets/{id}/processing
-X-User-Id: 3
 ```
 
 该接口不需要 JSON 请求体。
@@ -1012,8 +983,8 @@ X-User-Id: 3
 PowerShell 示例：
 
 ```powershell
-curl.exe -i -X PATCH "http://localhost:8080/tickets/13/processing" `
-  -H "X-User-Id: 3"
+curl.exe -i -u "worker_001:campus-demo-2026" -X PATCH `
+  "http://localhost:8080/tickets/13/processing"
 ```
 
 ### 成功响应
@@ -1082,7 +1053,6 @@ WHERE id = #{ticketId}
 
 ```http
 PATCH /tickets/{id}/resolution
-X-User-Id: 3
 Content-Type: application/json
 ```
 
@@ -1101,16 +1071,10 @@ Content-Type: application/json
 PowerShell 示例：
 
 ```powershell
-$body = @{
-  resolutionNote = "Replaced damaged cable and restored network connection."
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-  -Method Patch `
-  -Uri "http://localhost:8080/tickets/13/resolution" `
-  -Headers @{"X-User-Id" = "3"} `
-  -ContentType "application/json" `
-  -Body $body
+curl.exe -i -u "worker_001:campus-demo-2026" -X PATCH `
+  "http://localhost:8080/tickets/13/resolution" `
+  -H "Content-Type: application/json" `
+  -d '{\"resolutionNote\":\"Replaced damaged cable and restored network connection.\"}'
 ```
 
 ### 成功响应
@@ -1173,7 +1137,6 @@ WHERE id = #{ticketId}
 
 ```http
 PATCH /tickets/{id}/closure
-X-User-Id: 1
 ```
 
 该接口不需要 JSON 请求体。
@@ -1191,8 +1154,8 @@ X-User-Id: 1
 PowerShell 示例：
 
 ```powershell
-curl.exe -i -X PATCH "http://localhost:8080/tickets/13/closure" `
-  -H "X-User-Id:1"
+curl.exe -i -u "student_001:campus-demo-2026" -X PATCH `
+  "http://localhost:8080/tickets/13/closure"
 ```
 
 ### 成功响应
@@ -1520,19 +1483,19 @@ updatedAt
 mvn test
 ```
 
-当前源码共有 **76 条测试**：
+当前源码共有 **78 条测试**：
 
-- 42 条 `TicketController` MockMvc 测试。
+- 44 条 `TicketController` MockMvc 测试。
 - 4 条数据库认证集成测试。
 - 24 条 Service 真实数据库集成测试。
 - 5 条事务失败回滚测试。
 - 1 条 Spring 上下文启动测试。
 
-用户已在本机执行完整 `mvn test`，确认当前 76 条测试全部通过。
+用户已在本机执行完整 `mvn test`，确认当前 78 条测试全部通过。
 
 ### Controller 测试
 
-当前共有 42 条 Controller MockMvc 测试：
+当前共有 44 条 Controller MockMvc 测试，主要覆盖以下行为（下列分类不与测试方法逐项对应）：
 
 1. 合法创建请求返回 `201`。
 2. 空标题返回 `400`。
@@ -1577,10 +1540,12 @@ mvn test
 41. 详情请求携带与 principal 不同的伪造 `X-User-Id` 时，Service 仍收到 principal id。
 42. 创建请求携带与 principal 不同的伪造 `X-User-Id` 时，Service 仍收到 principal id。
 
+身份迁移后还专门覆盖 `/tickets/mine`、管理员分页和 processing 的伪造 header 场景；未认证请求即使附带伪造身份头也仍返回 401。五类业务接口均验证 Service 收到 principal id，而不是客户端声明的 id。
+
 Controller 测试使用模拟的 Service，不连接真实数据库，主要验证：
 
 - HTTP 方法和 URL。
-- 请求头和请求体。
+- 认证 principal、查询参数和请求体。
 - 参数校验。
 - HTTP 状态码。
 - JSON 响应结构。
@@ -1696,7 +1661,7 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - [x] 实现管理员列表的状态、创建人和维修人员筛选
 - [x] 保证 COUNT 与分页列表复用同一动态 WHERE 条件
 - [x] 完成筛选的单条件、组合条件、空结果和跨页测试
-- [x] 完成 42 条 Controller MockMvc 测试
+- [x] 完成 44 条 Controller MockMvc 测试
 - [x] 完成 4 条数据库认证集成测试
 - [x] 完成 24 条 Service 真实数据库集成测试
 - [x] 完成 5 条事务失败回滚测试
@@ -1706,7 +1671,7 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - [x] 接入 Spring Security 最小 HTTP Basic 认证过滤链
 - [x] 将 Spring Security 认证主体连接到数据库用户并实现密码哈希验证
 - [x] 详情和创建接口改为使用 principal id，并验证伪造 header 无效
-- [ ] 迁移剩余 7 个业务入口并彻底移除 Controller 的 `X-User-Id`
+- [x] 迁移剩余 7 个业务入口并彻底移除 Controller 对 `X-User-Id` 的依赖
 - [x] 使用当前小数据量完成分页筛选查询和索引的初步 EXPLAIN
 - [ ] 使用更大且接近真实分布的数据复测分页筛选查询和索引
 - [ ] 增加统一业务错误码
@@ -1720,7 +1685,7 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 当前版本存在以下明确限制：
 
 - 当前使用数据库账号、DelegatingPasswordEncoder 和 BCrypt 哈希完成 HTTP Basic 认证，但尚未实现 JWT、刷新令牌或前端登录流程。
-- 详情和创建接口已经绑定 principal；其余 7 个入口仍依赖客户端提供的临时 `X-User-Id`，尚未完全消除身份冒用风险。
+- 全部业务接口已经绑定 principal，客户端自填 `X-User-Id` 不再影响业务身份；当前仍使用 HTTP Basic，尚未实现 JWT、前端登录、TLS 部署和生产级安全加固。
 - 管理员列表已完成当前约 6 行小表的初步 EXPLAIN，但结果不能代表大数据量下的索引选择。
 - 状态更新使用条件更新进行基础并发保护，但尚未实现版本号或完整的乐观锁机制。
 - 尚未实现统一的业务错误码。
@@ -1757,7 +1722,7 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 → Spring Security 最小认证过滤链（已完成）
 → 数据库用户认证（已完成）
 → 详情与创建接口 principal 身份绑定（已完成）
-→ 剩余接口身份迁移
+→ 剩余接口身份迁移（已完成）
 → 接口文档和工程完善
 → Docker 与部署
 ```
@@ -1768,14 +1733,13 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 
 后续按照以下顺序继续开发：
 
-1. 将剩余 7 个业务入口改为从 `AppUserPrincipal` 取得用户 ID，删除 Controller 对 `X-User-Id` 的依赖。
-2. 使用更大且接近真实分布的数据复测筛选、排序和索引选择。
-3. 增加统一业务错误码。
-4. 增加 OpenAPI/Swagger 接口文档。
-5. 增加 Actuator 健康检查和必要的应用日志。
-6. 使用 Docker Compose 启动 MySQL 和应用。
-7. 完成从空环境启动的 README 复验。
-8. 整理项目演示、简历描述和面试问答。
+1. 使用更大且接近真实分布的数据复测筛选、排序和索引选择。
+2. 增加统一业务错误码。
+3. 增加 OpenAPI/Swagger 接口文档。
+4. 增加 Actuator 健康检查和必要的应用日志。
+5. 使用 Docker Compose 启动 MySQL 和应用。
+6. 完成从空环境启动的 README 复验。
+7. 整理项目演示、简历描述和面试问答。
 
 ---
 
