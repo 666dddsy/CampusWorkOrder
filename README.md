@@ -530,12 +530,12 @@ SOURCE D:/codejava/CampusWorkOrder/sql/seed.sql;
 
 ## 数据库连接配置
 
-`application.yml` 使用环境变量读取数据库用户名和密码：
+`application.yml` 使用环境变量读取数据库连接地址、用户名和密码；未设置 `DB_URL` 时，使用现有本机地址作为默认值：
 
 ```yaml
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/campus_work_order?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    url: ${DB_URL:jdbc:mysql://localhost:3306/campus_work_order?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -544,18 +544,22 @@ spring:
 ### PowerShell 临时设置环境变量
 
 ```powershell
+$env:DB_URL="jdbc:mysql://127.0.0.1:3306/campus_work_order?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai"
 $env:DB_USER="root"
 $env:DB_PASSWORD="你的MySQL密码"
 ```
 
-这种设置只对当前 PowerShell 窗口有效。
+上述用户名是本地示例，应使用自己实际的数据库账号。这种临时设置只作用于当前 PowerShell 会话及其后启动的子进程；应在同一个窗口启动应用，不会自动同步到另一个独立打开的终端或 IDEA 运行配置。
 
-检查变量：
+检查地址、用户名和密码是否已设置（不打印密码内容）：
 
 ```powershell
+$env:DB_URL
 $env:DB_USER
-$env:DB_PASSWORD
+[bool]$env:DB_PASSWORD
 ```
+
+`DB_URL` 的默认值仅适用于当前本机开发库；部署到不同主机、端口或隔离实例时需要显式配置。环境变量里不要将密码嵌入 JDBC URL，也不要把真实凭据写入提交记录或运行截图。
 
 不要把真实密码直接写入：
 
@@ -574,9 +578,10 @@ $env:DB_PASSWORD
 cd D:\codejava\CampusWorkOrder
 ```
 
-设置数据库环境变量：
+在这个启动窗口中设置数据库环境变量：
 
 ```powershell
+$env:DB_URL="jdbc:mysql://127.0.0.1:3306/campus_work_order?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai"
 $env:DB_USER="root"
 $env:DB_PASSWORD="你的MySQL密码"
 ```
@@ -598,6 +603,35 @@ mvn spring-boot:run
 ```text
 http://localhost:8080
 ```
+
+### 打包并通过 jar 启动
+
+在项目根目录执行：
+
+```powershell
+mvn '-DskipTests' package
+```
+
+此命令跳过测试执行，不能据此声称全部测试通过；需要测试时使用前面的 `mvn test`。本机已生成 Spring Boot 可执行产物 `target/CampusWorkOrder-0.0.1-SNAPSHOT.jar`，不是用于备份原始打包结果的 `.jar.original`。
+
+确认当前窗口中的数据库变量正确，并在打包成功后运行：
+
+```powershell
+java -jar '.\target\CampusWorkOrder-0.0.1-SNAPSHOT.jar' --server.port=8081
+```
+
+此命令将服务端口指定为 8081；不要把 IDEA 中旧服务的响应误当成新 jar 的结果。若文件名或端口有变化，以实际构建产物、启动日志和请求目标为准。
+
+另开请求窗口做只读冒烟检查：
+
+```powershell
+curl.exe -i 'http://localhost:8081/tickets/mine'
+curl.exe -i -u 'student_001' 'http://localhost:8081/tickets/mine'
+```
+
+第一条预期 401；第二条在交互提示中输入业务演示账号密码后，预期 200 并返回该账号的工单列表。业务演示账号与 MySQL 连接账号不是同一个概念。完成验证后在应用窗口按 Ctrl+C 正常停止。
+
+本段是启动方法与预期结果，不代表所有运行环境都已验收。现有库上的 jar 运行不等于独立空库或容器部署已经完成；不要为重复验证执行清库、seed 或状态变更请求。
 
 ---
 
