@@ -42,6 +42,7 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 - 工单创建人和当前维修人员的数据归属校验。
 - Spring Security 数据库认证：HTTP Basic 用户名/密码由 `app_user`、`UserDetailsService` 和 `PasswordEncoder` 验证。
 - 全部业务接口从认证 principal 取得业务用户 ID，不再信任客户端填写的 `X-User-Id`。
+- Actuator 最小健康检查：仅匿名开放 `GET /actuator/health`，隐藏健康详情和组件；业务接口仍要求认证。
 - 请求参数校验和字段级错误响应。
 - 业务异常的统一处理。
 - 创建、分配、开始处理、提交维修结果和关闭工单的事务一致性。
@@ -115,7 +116,7 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 | `WORKER` | 查看被分配的工单、开始处理、提交维修结果 | 已实现 |
 | `ADMIN` | 查看任意工单详情、分配维修人员、分页和筛选查看全部工单 | 已实现 |
 
-当前已经接入 Spring Security 数据库认证：所有请求必须先通过 HTTP Basic，未认证或密码错误时在进入 Controller 前返回 `401 Unauthorized`。
+当前已经接入 Spring Security 数据库认证：业务请求必须先通过 HTTP Basic，未认证或密码错误时在进入 Controller 前返回 `401 Unauthorized`。唯一明确配置的匿名例外是 `GET /actuator/health`；其他请求仍要求认证。
 
 认证链路为：
 
@@ -127,7 +128,7 @@ HTTP Basic
 → AppUserPrincipal 写入 Authentication / SecurityContext
 ```
 
-本地演示账号统一使用 seed 中明确标注的 demo-only 密码；它是公开演示凭据，禁止复用到真实账号。以下 README 中的所有 curl 示例都需要提供数据库用户名和密码：
+本地演示账号统一使用 seed 中明确标注的 demo-only 密码；它是公开演示凭据，禁止复用到真实账号。以下 README 中的业务 curl 示例需要提供应用用户名和密码，匿名健康检查除外。以下凭据只用于本地演示；日常验证优先使用 `-u "student_001"` 并按提示输入密码，避免把密码写入命令行和截图：
 
 ```powershell
 -u "student_001:campus-demo-2026"
@@ -156,6 +157,8 @@ Controller 测试分别覆盖详情、创建、个人列表、管理员分页和
 - Java 21
 - Spring Boot 4.0.8
 - Spring Web MVC
+- Spring Security（数据库用户认证与 HTTP Basic）
+- Spring Boot Actuator（最小健康检查）
 - Jakarta Bean Validation
 - MyBatis 4.0.1
 - MySQL 8
@@ -292,7 +295,7 @@ ticket_log
 |---|---|
 | `id` | 用户主键 |
 | `username` | 用户名 |
-| `password_hash` | 密码哈希占位字段 |
+| `password_hash` | 带编码器标识的密码哈希，用于实际认证 |
 | `role` | `REQUESTER`、`WORKER` 或 `ADMIN` |
 | `created_at` | 创建时间 |
 
@@ -632,6 +635,29 @@ curl.exe -i -u 'student_001' 'http://localhost:8081/tickets/mine'
 第一条预期 401；第二条在交互提示中输入业务演示账号密码后，预期 200 并返回该账号的工单列表。业务演示账号与 MySQL 连接账号不是同一个概念。完成验证后在应用窗口按 Ctrl+C 正常停止。
 
 本段是启动方法与预期结果，不代表所有运行环境都已验收。现有库上的 jar 运行不等于独立空库或容器部署已经完成；不要为重复验证执行清库、seed 或状态变更请求。
+
+---
+
+## 健康检查与访问边界
+
+Actuator 通过 HTTP 只暴露 `health`，并设置 `show-details: never`、`show-components: never`。SecurityFilterChain 仅对 `GET /actuator/health` 放行匿名请求，其余请求保留认证要求；没有整体放开 `/actuator/**`。
+
+沿用前面的数据库环境变量启动应用后，执行以下只读请求（示例端口为 8081，须与实际启动端口一致）：
+
+```powershell
+curl.exe -i 'http://localhost:8081/actuator/health'
+curl.exe -i 'http://localhost:8081/tickets/mine'
+curl.exe -i -u 'student_001' 'http://localhost:8081/tickets/mine'
+```
+
+在当前正常运行环境中，预期分别为健康 `200` 且 `status=UP`、匿名业务 `401`、正确账号认证后的业务 `200`。认证请求不需要 `X-User-Id`，curl 会交互提示输入密码。
+
+- `UP` 表示当前参与聚合的健康检查未报告不健康，不代表所有业务操作、数据权限或未来请求都正确。完整应用中的健康检查可能访问实际数据源，MockMvc 不会自动将数据库替换成 mock。
+- 健康响应不返回 `details` 或 `components`；可能包含健康分组名称，客户端不应要求响应必须只有一个 `status` 字段。
+- `/actuator/env` 没有通过 HTTP 暴露；已认证访问返回 `404`。匿名 `401` 只能证明被认证拦截，不能单独证明该端点未暴露。
+- `401` 优先检查安全规则，`404` 检查依赖、暴露配置和测试上下文；`503/DOWN` 检查服务端日志与实际依赖，不写死 `UP`、不关闭数据库检查掩盖故障、不对匿名用户公开全部详情。
+
+2026-10-25 的真实 HTTP 验证已观察到上述 `200/UP → 401 → 200`。没有为这次验证新增、修改或删除工单。
 
 ---
 
@@ -1487,9 +1513,11 @@ updatedAt
 | `200 OK` | 查询或状态操作成功 |
 | `201 Created` | 工单创建成功 |
 | `400 Bad Request` | 请求格式或字段校验失败 |
+| `401 Unauthorized` | 未认证或认证失败 |
 | `403 Forbidden` | 当前用户身份已知，但没有执行该操作的权限 |
 | `404 Not Found` | 目标工单不存在 |
 | `409 Conflict` | 工单存在，但当前状态不允许执行该操作 |
+| `503 Service Unavailable` | 健康检查报告 DOWN 或 OUT_OF_SERVICE 时的默认响应，不属于业务异常统一格式 |
 
 业务异常统一返回：
 
@@ -1517,15 +1545,16 @@ updatedAt
 mvn test
 ```
 
-当前源码共有 **78 条测试**：
+当前源码共有 **81 条测试**：
 
 - 44 条 `TicketController` MockMvc 测试。
 - 4 条数据库认证集成测试。
+- 3 条健康端点与安全边界集成测试。
 - 24 条 Service 真实数据库集成测试。
 - 5 条事务失败回滚测试。
 - 1 条 Spring 上下文启动测试。
 
-用户已在本机执行完整 `mvn test`，确认当前 78 条测试全部通过。
+2026-10-25 19:36 生成的本地 Surefire 报告合计 81 条测试，失败、错误和跳过均为 0。本次仅核对已有报告，没有重复运行测试。
 
 ### Controller 测试
 
@@ -1594,6 +1623,16 @@ Controller 测试使用模拟的 Service，不连接真实数据库，主要验�
 3. 正确数据库密码能够通过 HTTP Basic 并进入 Controller，而不是返回 401。
 4. 错误密码返回 401。
 
+### 健康端点与安全边界集成测试
+
+`HealthEndpointTest` 使用 `@SpringBootTest` 与 `@AutoConfigureMockMvc`，加载完整应用并保留安全过滤器，覆盖：
+
+1. 匿名健康检查返回 `200`、`status=UP`，且没有 `details/components`。
+2. 匿名访问 `/tickets/mine` 仍返回 `401`。
+3. 通过自定义 principal 认证后访问未暴露的 `/actuator/env` 返回 `404`。
+
+第三项使用测试认证主体验证访问边界，不冒充一次真实密码校验；数据库密码认证由独立的认证集成测试覆盖。
+
 ### Service 集成测试
 
 Service 集成测试连接真实 MySQL，当前共有 24 条测试：
@@ -1640,6 +1679,7 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 | 测试方式 | 主要验证内容 |
 |---|---|
 | Controller MockMvc | HTTP 参数、路由、状态码、JSON 和 Controller 调用 |
+| 健康端点集成测试 | 完整应用中的实际健康端点、匿名例外与业务认证边界 |
 | Service 集成测试 | 业务规则、MyBatis、SQL 和真实数据库结果 |
 | 事务回滚测试 | 多次数据库写入失败后的整体回滚 |
 | 真实 HTTP 验证 | 应用启动后的完整请求链路和实际数据库结果 |
@@ -1697,6 +1737,7 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - [x] 完成筛选的单条件、组合条件、空结果和跨页测试
 - [x] 完成 44 条 Controller MockMvc 测试
 - [x] 完成 4 条数据库认证集成测试
+- [x] 完成 3 条健康端点与安全边界集成测试
 - [x] 完成 24 条 Service 真实数据库集成测试
 - [x] 完成 5 条事务失败回滚测试
 - [x] 完成核心工单状态流闭环
@@ -1709,7 +1750,8 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - [x] 使用当前小数据量完成分页筛选查询和索引的初步 EXPLAIN
 - [ ] 使用更大且接近真实分布的数据复测分页筛选查询和索引
 - [ ] 增加统一业务错误码
-- [ ] 完成接口文档和健康检查
+- [x] 完成最小 Actuator 健康检查、访问边界及真实 HTTP 验证
+- [ ] 完成 OpenAPI/Swagger 接口文档
 - [ ] 完成部署
 
 ---
@@ -1757,8 +1799,9 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 → 数据库用户认证（已完成）
 → 详情与创建接口 principal 身份绑定（已完成）
 → 剩余接口身份迁移（已完成）
-→ 接口文档和工程完善
-→ Docker 与部署
+→ 数据源配置外置与最小健康检查（已完成）
+→ 必要应用日志与隔离环境交付
+→ 演示与简历整理，按需补充深度
 ```
 
 ---
@@ -1767,13 +1810,12 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 
 后续按照以下顺序继续开发：
 
-1. 使用更大且接近真实分布的数据复测筛选、排序和索引选择。
-2. 增加统一业务错误码。
-3. 增加 OpenAPI/Swagger 接口文档。
-4. 增加 Actuator 健康检查和必要的应用日志。
-5. 使用 Docker Compose 启动 MySQL 和应用。
-6. 完成从空环境启动的 README 复验。
-7. 整理项目演示、简历描述和面试问答。
+1. 补充必要应用日志与启动/依赖故障定位说明，不记录密码或 Authorization。
+2. 使用 Docker Compose 启动独立 MySQL 和应用，保留原开发库。
+3. 完成隔离空环境初始化、保留数据重启和 README 启动复验。
+4. 整理项目演示、简历描述和面试问答。
+5. 使用更大且接近真实分布的数据复测筛选、排序和索引选择，记录可重复的测量结果。
+6. 统一业务错误码及 OpenAPI/Swagger 按需求补充，不作为第一版可复现交付的前置条件。
 
 ---
 
