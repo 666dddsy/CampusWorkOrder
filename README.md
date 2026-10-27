@@ -639,6 +639,28 @@ curl.exe -i -u 'student_001' 'http://localhost:8081/tickets/mine'
 
 ---
 
+## Docker 部署准备（文件已完成，运行待验收）
+
+项目根目录已新增 `Dockerfile` 与 `.dockerignore`，2026-10-27 完成静态检查：
+
+- 使用 `eclipse-temurin:21-jre-jammy`，工作目录为 `/app`。
+- 复制本机 Maven 已生成的 `target/CampusWorkOrder-0.0.1-SNAPSHOT.jar` 为 `app.jar`；Dockerfile 本身不执行编译或 Maven 打包。
+- 使用 exec 形式的 `ENTRYPOINT` 运行 `java -jar app.jar`；声明容器内部端口 `8080`，`EXPOSE` 不会自动发布宿主机端口。
+- `.dockerignore` 排除 Git/IDE 元数据、日志、本地 `.env` 类文件及部分编译中间产物，保留所需 jar。数据库凭据不写入 Dockerfile；仍通过运行时的 `DB_URL`、`DB_USER`、`DB_PASSWORD` 提供。
+
+以下仅为环境就绪后的构建示例，不是已执行成功的记录：
+
+```powershell
+Set-Location 'D:\codejava\CampusWorkOrder'
+docker build -t campus-work-order:day50 .
+```
+
+末尾的 `.` 指定项目根目录为构建上下文；镜像构建与容器启动是不同步骤。当前用户终端尚不能识别 `docker` 命令，未完成镜像构建、容器启动、Compose 编排或隔离 MySQL 初始化验收；本段不宣称生产可用。
+
+后续若采用同一 Compose 网络中的 `app`/`db` 服务，应用应连接 `db:3306`，不能沿用容器内的 `localhost:3306` 默认地址。现有 SQL 固定使用 `campus_work_order`，初始化必须先确认隔离实例，不能在原开发实例的新别名库上直接执行原脚本。
+
+---
+
 ## 健康检查与访问边界
 
 Actuator 通过 HTTP 只暴露 `health`，并设置 `show-details: never`、`show-components: never`。SecurityFilterChain 仅对 `GET /actuator/health` 放行匿名请求，其余请求保留认证要求；没有整体放开 `/actuator/**`。
@@ -1785,6 +1807,8 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - [ ] 增加统一业务错误码
 - [x] 完成最小 Actuator 健康检查、访问边界及真实 HTTP 验证
 - [ ] 完成 OpenAPI/Swagger 接口文档
+- [x] 完成应用 Dockerfile 与 .dockerignore 的静态准备
+- [ ] 完成镜像构建、容器运行和隔离数据库复现验收
 - [ ] 完成部署
 
 ---

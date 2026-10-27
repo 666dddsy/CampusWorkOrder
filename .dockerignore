@@ -1,0 +1,24 @@
+# 该文件借助ai帮忙过滤
+# Git 历史和配置，构建用不到
+.git/
+.gitignore
+
+# IDEA 配置
+.idea/
+*.iml
+
+# 日志
+*.log
+target/*.log
+
+# 本地环境变量文件（可能含数据库密码）
+.env
+.env.*
+
+# 编译中间产物，只保留最终的 jar
+target/classes/
+target/test-classes/
+target/generated-sources/
+target/generated-test-sources/
+target/maven-status/
+target/surefire-reports/
