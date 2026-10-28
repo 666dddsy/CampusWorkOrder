@@ -300,7 +300,7 @@ ticket_log
 | `role` | `REQUESTER`、`WORKER` 或 `ADMIN` |
 | `created_at` | 创建时间 |
 
-`seed.sql` 中四个演示用户已保存带 `{bcrypt}` 前缀的密码哈希；已有数据库可执行 `sql/migrate_password_hash.sql` 定向升级，不需要重跑整份 seed。
+`seed.sql` 中四个演示用户已保存带 `{bcrypt}` 前缀的密码哈希。新库使用对应初始化脚本；已保存正确哈希的现有库无需重复初始化。若仍需处理旧格式密码，应先核对记录并准备定向迁移，不要重跑整份 seed 覆盖已有数据。
 
 ### ticket
 
@@ -655,9 +655,31 @@ Set-Location 'D:\codejava\CampusWorkOrder'
 docker build -t campus-work-order:day50 .
 ```
 
-末尾的 `.` 指定项目根目录为构建上下文；镜像构建与容器启动是不同步骤。当前用户终端尚不能识别 `docker` 命令，未完成镜像构建、容器启动、Compose 编排或隔离 MySQL 初始化验收；本段不宣称生产可用。
+末尾的 `.` 指定项目根目录为构建上下文；镜像构建与容器启动是不同步骤。当前用户终端尚不能识别 `docker` 命令，未完成镜像构建、容器启动、Compose 编排或容器内独立 MySQL 初始化验收；本段不宣称生产可用。以下同实例新库的本地验证不等同于这些容器验证。
 
 后续若采用同一 Compose 网络中的 `app`/`db` 服务，应用应连接 `db:3306`，不能沿用容器内的 `localhost:3306` 默认地址。现有 SQL 固定使用 `campus_work_order`，初始化必须先确认隔离实例，不能在原开发实例的新别名库上直接执行原脚本。
+
+---
+
+## 本地新库复现（2026-10-28 已验收）
+
+为在 Docker 环境未就绪时推进交付，增加同一 MySQL 实例内的新库初始化副本：
+
+- `sql/local-repro/schema.sql`：显式创建并使用 `cworeproday51`，不使用 `IF NOT EXISTS` 掩盖同名库。
+- `sql/local-repro/seed.sql`：显式使用 `cworeproday51` 并查询当前库；表结构与种子数据内容沿用原脚本。原 `sql/schema.sql`、`sql/seed.sql` 不变。
+- 运行账号设计为仅对该新库授予数据操作权限，不能使用 root；建库/结构变更由管理连接执行，实际数据库口令不放进脚本或仓库。
+- 项目外目录 `D:\codejava\CampusWorkOrder-repro-day51` 已有 `app.jar` 与不含凭据的 `create-ticket.json`。复制后的 jar 与项目 target 中的 jar 经 SHA-256 比对一致；用户已确认实际从该目录启动复制后的 jar。
+- 应用通过既有 `DB_URL`、`DB_USER`、`DB_PASSWORD` 外部配置连接新库，验证请求使用本机 `18081` 端口。数据库运行账号与 `student_001` 业务演示账号用途不同；不要把业务密码与数据库密码混用。
+
+已取得的截图证据：
+
+- `cworepro51` 查询原库 `campus_work_order.ticket` 返回 MySQL 1142，SELECT 被拒绝。这证明该次查询的拒绝，不单独证明完整授权清单或应用连接使用的身份。
+- `GET /actuator/health` 返回 `200/UP`，正确业务认证的 `GET /tickets/mine` 返回 `200`。
+- `POST /tickets` 返回 `201`、新工单 id 为 `6`；之后 `GET /tickets/6` 返回 `200` 且标题为 `Day51 isolated run`。
+
+补充的操作事实（用户于 2026-10-28 确认）：确实从上述项目外目录启动 jar，停止并重新启动应用后才查询工单 6；已在新库核对该工单及其创建日志，重启和查询没有增加创建日志。结合文件检查和截图，当前本地复现链路已验收；上述中间操作依据用户确认记录，没有为重复验收重跑请求、应用或 seed。
+
+这是一套 MySQL 服务内的逻辑隔离，不是独立数据库实例；应用重启验证也不能推导出数据库重启、机器断电或 Docker 数据卷恢复已通过。不要清空原库，不要重复执行 seed 来“恢复”本来仍存在的数据。
 
 ---
 
@@ -1808,6 +1830,9 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - [x] 完成最小 Actuator 健康检查、访问边界及真实 HTTP 验证
 - [ ] 完成 OpenAPI/Swagger 接口文档
 - [x] 完成应用 Dockerfile 与 .dockerignore 的静态准备
+- [x] 完成 cworeproday51 初始化副本及项目外 jar 文件准备
+- [x] 取得 18081 健康/列表 200、创建 id=6 的 201 与随后详情 200 截图
+- [x] 确认项目外启动、应用重启后读取与新库创建日志核对的完整结果（用户于 2026-10-28 确认）
 - [ ] 完成镜像构建、容器运行和隔离数据库复现验收
 - [ ] 完成部署
 
