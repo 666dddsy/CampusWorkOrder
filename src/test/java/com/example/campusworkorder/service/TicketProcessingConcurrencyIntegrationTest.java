@@ -136,6 +136,13 @@ public class TicketProcessingConcurrencyIntegrationTest {
         }finally {
             if (pool != null) {
                 pool.shutdownNow();
+                try {
+                    if (!pool.awaitTermination(5, TimeUnit.SECONDS)) { // ② 最多等 5 秒
+                        System.out.println("线程池未在 5 秒内终止");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();                // ③ 恢复中断标记
+                }
             }
             if (ticketId != null) {
                 jdbcTemplate.update("delete from ticket_log where ticket_id = ?", ticketId);
