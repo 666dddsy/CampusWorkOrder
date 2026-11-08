@@ -172,19 +172,8 @@ public class TicketService {
         Ticket ticket=ticketMapper.selectById(ticketId);
         if(ticket==null)
             return null;
-        return switch (role) {
-            case UserRole.ADMIN -> ticket;
-            case UserRole.REQUESTER -> {
-                if (!currentUserId.equals(ticket.getCreatorId()))
-                    throw new BusinessException(HttpStatus.FORBIDDEN, "You don't have right to get the ticket");
-                yield ticket;
-            }
-            case UserRole.WORKER -> {
-                if (!currentUserId.equals(ticket.getAssigneeId()))
-                    throw new BusinessException(HttpStatus.FORBIDDEN, "You don't have right to get the ticket");
-                yield ticket;
-            }
-        };
+        ensureCanView(ticket,currentUserId,role,"You don't have right to get the ticket");
+        return ticket;
     }
 
     public List<Ticket> selectByCreatorId(Long creatorId){
@@ -204,6 +193,17 @@ public class TicketService {
         return ticketMapper.selectByAssigneeId(currentUserId);
     }
 
+    public List<TicketLog> selectLogsByTicketId(Long ticketId,Long userId){
+        UserRole role=appUserMapper.selectRoleById(userId);
+        if(role==null)
+            throw new BusinessException(HttpStatus.FORBIDDEN, "You don't have right to get the ticketLog");
+        Ticket ticket=ticketMapper.selectById(ticketId);
+        if(ticket==null)
+            return null;
+        ensureCanView(ticket,userId,role,"You don't have right to get the ticketLog");
+        return ticketLogMapper.selectByTicketId(ticketId);
+    }
+
     private Ticket toTicket(Long creatorId,TicketCreateRequest ticketCreateRequest){
         Ticket ticket=new Ticket();
         ticket.setCreatorId(creatorId);
@@ -216,7 +216,6 @@ public class TicketService {
         ticket.setStatus(TicketStatus.CREATED);
         return ticket;
     }
-
     private TicketLog toTicketLog(Long creatorId,Ticket ticket){
         TicketLog ticketLog=new TicketLog();
         ticketLog.setTicketId(ticket.getId());
@@ -226,7 +225,6 @@ public class TicketService {
         ticketLog.setNote("报修人创建工单");
         return ticketLog;
     }
-
     private TicketLog toTicketLogAssigned(Long operatorId,Ticket ticket){
         TicketLog ticketLog=new TicketLog();
         ticketLog.setTicketId(ticket.getId());
@@ -236,7 +234,6 @@ public class TicketService {
         ticketLog.setNote("管理员分配工单");
         return ticketLog;
     }
-
     private TicketLog toTicketLogProcessed(Long operatorId,Ticket ticket){
         TicketLog ticketLog=new TicketLog();
         ticketLog.setTicketId(ticket.getId());
@@ -246,7 +243,6 @@ public class TicketService {
         ticketLog.setNote("正在处理工单");
         return ticketLog;
     }
-
     private TicketLog toTicketLogResolved(Long operatorId,Ticket ticket,String note){
         TicketLog ticketLog=new TicketLog();
         ticketLog.setTicketId(ticket.getId());
@@ -256,7 +252,6 @@ public class TicketService {
         ticketLog.setNote(note);
         return ticketLog;
     }
-
     private TicketLog toTicketLogClosed(Long operatorId,Ticket ticket){
         TicketLog ticketLog=new TicketLog();
         ticketLog.setTicketId(ticket.getId());
@@ -265,5 +260,13 @@ public class TicketService {
         ticketLog.setOperatorId(operatorId);
         ticketLog.setNote("报修人确认问题已解决并关闭工单");
         return ticketLog;
+    }
+    private void ensureCanView(Ticket ticket, Long userId, UserRole role,String message) {
+        boolean allowed = switch (role) {
+            case ADMIN -> true;
+            case REQUESTER -> userId.equals(ticket.getCreatorId());
+            case WORKER -> userId.equals(ticket.getAssigneeId());
+        };
+        if (!allowed) throw new BusinessException(HttpStatus.FORBIDDEN, message);
     }
 }

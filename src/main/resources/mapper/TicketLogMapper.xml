@@ -27,4 +27,11 @@
 
     </insert>
 
+    <select id="selectByTicketId"
+            resultType="com.example.campusworkorder.entity.TicketLog">
+        SELECT id, ticket_id, operator_id, from_status, to_status, note, created_at
+        FROM ticket_log
+        WHERE ticket_id=#{ticketId}
+        ORDER BY created_at DESC,id DESC
+    </select>
 </mapper>

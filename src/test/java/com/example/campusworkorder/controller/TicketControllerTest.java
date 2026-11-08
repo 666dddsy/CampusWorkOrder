@@ -7,6 +7,7 @@ import com.example.campusworkorder.domain.enums.TicketStatus;
 import com.example.campusworkorder.domain.enums.UserRole;
 import com.example.campusworkorder.dto.*;
 import com.example.campusworkorder.entity.Ticket;
+import com.example.campusworkorder.entity.TicketLog;
 import com.example.campusworkorder.exception.BusinessException;
 import com.example.campusworkorder.security.AppUserPrincipal;
 import com.example.campusworkorder.service.TicketService;
@@ -73,115 +74,6 @@ public class TicketControllerTest {
         ticket.setCreatedAt(LocalDateTime.of(2025, 10, 9, 10, 30));
         ticket.setUpdatedAt(LocalDateTime.of(2025, 10, 9, 10, 30));
         return ticket;
-    }
-
-    @Test
-    void createTicket_withRightInformation_shouldReturn201()throws Exception{
-        Ticket ticket=exampleTicket();
-        when(ticketService.createTicket(eq(12L),any(TicketCreateRequest.class)))
-                .thenReturn(101L);
-        when(ticketService.selectById(eq(101L)))
-                .thenReturn(ticket);
-        mockMvc.perform(post("/tickets")
-                .with(user(new AppUserPrincipal(12L, "student_001", "x", UserRole.REQUESTER)))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                                {
-                                  "title": "宿舍水管漏水",
-                                  "description": "洗手池下方持续漏水",
-                                  "location": "滨江宿舍3栋412",
-                                  "category": "PLUMBING",
-                                  "priority": "MEDIUM"
-                                }
-                                """))
-                .andExpect(status().isCreated())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_JSON
-                ))
-                .andExpect(jsonPath("$.id").value(101))
-                .andExpect(jsonPath("$.creatorId").value(12))
-                .andExpect(jsonPath("$.assigneeId").value(nullValue()))
-                .andExpect(jsonPath("$.title").value("宿舍水管漏水"))
-                .andExpect(jsonPath("$.category").value("PLUMBING"))
-                .andExpect(jsonPath("$.priority").value("MEDIUM"))
-                .andExpect(jsonPath("$.status").value("CREATED"))
-                .andExpect(jsonPath("$.createdAt").exists());
-        verify(ticketService).createTicket(
-                eq(12L),
-                any(TicketCreateRequest.class)
-        );
-        verify(ticketService).selectById(101L);
-    }
-    @Test
-    void createTicket_withBlankTitle_shouldReturn400()throws Exception{
-        mockMvc.perform(post("/tickets")
-                        .with(user(new AppUserPrincipal(12L, "student_001", "x", UserRole.REQUESTER)))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                                {
-                                  "title": " ",
-                                  "description": "洗手池下方持续漏水",
-                                  "location": "滨江宿舍3栋412",
-                                  "category": "PLUMBING",
-                                  "priority": "MEDIUM"
-                                }
-                                """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.title").value("title must not be blank"));
-        verifyNoInteractions(ticketService);
-    }
-    @Test
-    @WithAnonymousUser
-    void createTicket_withoutUserAndPassword_shouldReturn401()throws Exception{
-        mockMvc.perform(post("/tickets")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                                {
-                                  "title": "宿舍水管漏水",
-                                  "description": "洗手池下方持续漏水",
-                                  "location": "滨江宿舍3栋412",
-                                  "category": "PLUMBING",
-                                  "priority": "MEDIUM"
-                                }
-                                """))
-                .andExpect(status().isUnauthorized());
-        verifyNoInteractions(ticketService);
-    }
-    @Test
-    void createTicket_withWrongCategory_shouldReturn400()throws Exception{
-        mockMvc.perform(post("/tickets")
-                        .with(user(new AppUserPrincipal(12L, "student_001", "x", UserRole.REQUESTER)))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                                {
-                                  "title": "宿舍水管漏水",
-                                  "description": "洗手池下方持续漏水",
-                                  "location": "滨江宿舍3栋412",
-                                  "category": "TXT",
-                                  "priority": "MEDIUM"
-                                }
-                                """))
-                .andExpect(status().isBadRequest()) ;
-    verifyNoInteractions(ticketService);
-    }
-    @Test
-    void createTicket_withNonRequester_shouldReturn403()throws Exception{
-        when(ticketService.createTicket(eq(4L),any(TicketCreateRequest.class)))
-                .thenThrow(new BusinessException(HttpStatus.FORBIDDEN,"You are not Requester"));
-        mockMvc.perform(post("/tickets")
-                        .with(as(4L, UserRole.WORKER))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "title": "宿舍水管漏水",
-                                  "description": "洗手池下方持续漏水",
-                                  "location": "滨江宿舍3栋412",
-                                  "category": "PLUMBING",
-                                  "priority": "MEDIUM"
-                                }
-                                """))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("You are not Requester"));
     }
 
     @Test
@@ -269,6 +161,168 @@ public class TicketControllerTest {
 
         verify(ticketService).selectByCreatorId(12L);
         verify(ticketService, never()).selectByCreatorId(4L);
+    }
+
+    @Test
+    @WithAnonymousUser
+    void getLogs_withoutLogin_shouldReturn401() throws Exception {
+        mockMvc.perform(get("/tickets/{id}/logs", 101L))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(ticketService);
+    }
+    @Test
+    void getLogs_whenServiceThrowsForbidden_shouldReturn403() throws Exception {
+        when(ticketService.selectLogsByTicketId(101L, 3L))
+                .thenThrow(new BusinessException(
+                        HttpStatus.FORBIDDEN,
+                        "You don't have right to get the ticketLog"));
+
+        mockMvc.perform(get("/tickets/{id}/logs", 101L)
+                        .with(as(3L, UserRole.WORKER)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value("You don't have right to get the ticketLog"));
+    }
+    @Test
+    void getLogs_whenTicketNotFound_shouldReturn404() throws Exception {
+        when(ticketService.selectLogsByTicketId(101L, 1L)).thenReturn(null);
+
+        mockMvc.perform(get("/tickets/{id}/logs", 101L)
+                        .with(as(1L, UserRole.ADMIN)))
+                .andExpect(status().isNotFound());
+    }
+    @Test
+    void getLogs_shouldReturnFields() throws Exception {
+        TicketLog log = new TicketLog();
+        log.setId(9L);
+        log.setTicketId(101L);
+        log.setOperatorId(4L);
+        log.setFromStatus(TicketStatus.CREATED);
+        log.setToStatus(TicketStatus.ASSIGNED);
+        log.setNote("管理员分配工单");
+        log.setCreatedAt(LocalDateTime.of(2026, 11, 8, 10, 0));
+
+        when(ticketService.selectLogsByTicketId(101L, 1L))
+                .thenReturn(List.of(log));
+
+        mockMvc.perform(get("/tickets/{id}/logs", 101L)
+                        .with(as(1L, UserRole.ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(9))
+                .andExpect(jsonPath("$[0].fromStatus").value("CREATED"))
+                .andExpect(jsonPath("$[0].toStatus").value("ASSIGNED"))
+                .andExpect(jsonPath("$[0].operatorId").value(4))
+                .andExpect(jsonPath("$[0].note").value("管理员分配工单"))
+                .andExpect(jsonPath("$[0].createdAt").exists());
+    }
+
+    @Test
+    void createTicket_withRightInformation_shouldReturn201()throws Exception{
+        Ticket ticket=exampleTicket();
+        when(ticketService.createTicket(eq(12L),any(TicketCreateRequest.class)))
+                .thenReturn(101L);
+        when(ticketService.selectById(eq(101L)))
+                .thenReturn(ticket);
+        mockMvc.perform(post("/tickets")
+                        .with(user(new AppUserPrincipal(12L, "student_001", "x", UserRole.REQUESTER)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "宿舍水管漏水",
+                                  "description": "洗手池下方持续漏水",
+                                  "location": "滨江宿舍3栋412",
+                                  "category": "PLUMBING",
+                                  "priority": "MEDIUM"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_JSON
+                ))
+                .andExpect(jsonPath("$.id").value(101))
+                .andExpect(jsonPath("$.creatorId").value(12))
+                .andExpect(jsonPath("$.assigneeId").value(nullValue()))
+                .andExpect(jsonPath("$.title").value("宿舍水管漏水"))
+                .andExpect(jsonPath("$.category").value("PLUMBING"))
+                .andExpect(jsonPath("$.priority").value("MEDIUM"))
+                .andExpect(jsonPath("$.status").value("CREATED"))
+                .andExpect(jsonPath("$.createdAt").exists());
+        verify(ticketService).createTicket(
+                eq(12L),
+                any(TicketCreateRequest.class)
+        );
+        verify(ticketService).selectById(101L);
+    }
+    @Test
+    void createTicket_withBlankTitle_shouldReturn400()throws Exception{
+        mockMvc.perform(post("/tickets")
+                        .with(user(new AppUserPrincipal(12L, "student_001", "x", UserRole.REQUESTER)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": " ",
+                                  "description": "洗手池下方持续漏水",
+                                  "location": "滨江宿舍3栋412",
+                                  "category": "PLUMBING",
+                                  "priority": "MEDIUM"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("title must not be blank"));
+        verifyNoInteractions(ticketService);
+    }
+    @Test
+    @WithAnonymousUser
+    void createTicket_withoutUserAndPassword_shouldReturn401()throws Exception{
+        mockMvc.perform(post("/tickets")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "宿舍水管漏水",
+                                  "description": "洗手池下方持续漏水",
+                                  "location": "滨江宿舍3栋412",
+                                  "category": "PLUMBING",
+                                  "priority": "MEDIUM"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(ticketService);
+    }
+    @Test
+    void createTicket_withWrongCategory_shouldReturn400()throws Exception{
+        mockMvc.perform(post("/tickets")
+                        .with(user(new AppUserPrincipal(12L, "student_001", "x", UserRole.REQUESTER)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "宿舍水管漏水",
+                                  "description": "洗手池下方持续漏水",
+                                  "location": "滨江宿舍3栋412",
+                                  "category": "TXT",
+                                  "priority": "MEDIUM"
+                                }
+                                """))
+                .andExpect(status().isBadRequest()) ;
+        verifyNoInteractions(ticketService);
+    }
+    @Test
+    void createTicket_withNonRequester_shouldReturn403()throws Exception{
+        when(ticketService.createTicket(eq(4L),any(TicketCreateRequest.class)))
+                .thenThrow(new BusinessException(HttpStatus.FORBIDDEN,"You are not Requester"));
+        mockMvc.perform(post("/tickets")
+                        .with(as(4L, UserRole.WORKER))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "title": "宿舍水管漏水",
+                                  "description": "洗手池下方持续漏水",
+                                  "location": "滨江宿舍3栋412",
+                                  "category": "PLUMBING",
+                                  "priority": "MEDIUM"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You are not Requester"));
     }
     @Test
     void assignTicket_shouldReturn200AndAssignedTicket()throws Exception{

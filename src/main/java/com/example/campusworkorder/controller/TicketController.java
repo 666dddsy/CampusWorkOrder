@@ -2,6 +2,7 @@ package com.example.campusworkorder.controller;
 
 import com.example.campusworkorder.dto.*;
 import com.example.campusworkorder.entity.Ticket;
+import com.example.campusworkorder.entity.TicketLog;
 import com.example.campusworkorder.security.AppUserPrincipal;
 import com.example.campusworkorder.service.TicketService;
 import jakarta.validation.Valid;
@@ -78,6 +79,21 @@ public class TicketController {
         pageResult.setPageSize(pageResults.getPageSize());
         pageResult.setTotal(pageResults.getTotal());
         return pageResult;
+    }
+
+    @GetMapping("/{id}/logs")
+    public ResponseEntity<List<TicketLogResponse>> selectTicketLogById(
+            @AuthenticationPrincipal AppUserPrincipal principal,
+            @PathVariable Long id
+    ){
+        List<TicketLog> ticketLogs=ticketService.selectLogsByTicketId(id,principal.getId());
+        if(ticketLogs==null)
+            return ResponseEntity.notFound().build();
+        List<TicketLogResponse> ticketLogResponses=new ArrayList<>();
+        for(TicketLog ticketLog:ticketLogs){
+            ticketLogResponses.add(toTicketLogResponse(ticketLog));
+        }
+        return ResponseEntity.ok(ticketLogResponses);
     }
 
     @PostMapping
@@ -159,5 +175,15 @@ public class TicketController {
         ticketResponse.setCreatorId(ticket.getCreatorId());
         ticketResponse.setTitle(ticket.getTitle());
         return ticketResponse;
+    }
+    private TicketLogResponse toTicketLogResponse(TicketLog ticketLog){
+        TicketLogResponse ticketLogResponse=new TicketLogResponse();
+        ticketLogResponse.setId(ticketLog.getId());
+        ticketLogResponse.setFromStatus(ticketLog.getFromStatus());
+        ticketLogResponse.setToStatus(ticketLog.getToStatus());
+        ticketLogResponse.setOperatorId(ticketLog.getOperatorId());
+        ticketLogResponse.setCreatedAt(ticketLog.getCreatedAt());
+        ticketLogResponse.setNote(ticketLog.getNote());
+        return ticketLogResponse;
     }
 }
