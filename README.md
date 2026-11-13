@@ -22,7 +22,7 @@ CampusWorkOrder 是一个基于 Spring Boot、MyBatis 和 MySQL 实现的校园�
 CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 ```
 
-管理员分页筛选、业务权限边界和数据库用户名密码认证已经实现；全部九个业务接口均从认证 principal 获取用户 ID，不再信任客户端自填身份头。
+管理员分页筛选、业务权限边界和数据库用户名密码认证已经实现；全部十个业务接口均从认证 principal 获取用户 ID，不再信任客户端自填身份头。
 
 ---
 
@@ -48,6 +48,7 @@ CREATED → ASSIGNED → PROCESSING → RESOLVED → CLOSED
 - 受控业务拒绝的应用诊断日志：记录固定事件名、HTTP 状态和代码内定义的业务原因，不改变响应契约。
 - 创建、分配、开始处理、提交维修结果和关闭工单的事务一致性。
 - 每次状态变化写入 `ticket_log` 审计日志。
+- 受权限保护的只读工单状态日志查询：`GET /tickets/{id}/logs`；`ADMIN` 可查询全部工单，工单创建人和当前维修人员只能查询自己有权访问的工单，结果按 `created_at DESC, id DESC` 稳定排序。
 - 基于条件更新的重复分配、越权处理、重复解决、重复关闭和并发状态保护。
 - Controller MockMvc 切片测试。
 - Service 真实数据库集成测试。
@@ -142,7 +143,7 @@ curl.exe -i -u "student_001:campus-demo-2026" `
   "http://localhost:8080/tickets/1"
 ```
 
-当前全部九个业务入口均通过 `@AuthenticationPrincipal AppUserPrincipal` 取得数据库用户 ID。客户端即使额外发送伪造的 `X-User-Id`，也不会改变 Controller 传给 Service 的用户 ID。
+当前全部十个业务入口均通过 `@AuthenticationPrincipal AppUserPrincipal` 取得数据库用户 ID。客户端即使额外发送伪造的 `X-User-Id`，也不会改变 Controller 传给 Service 的用户 ID。
 
 Controller 测试分别覆盖详情、创建、个人列表、管理员分页和状态变更接口的伪造 header 场景，验证业务身份始终来自 principal。未认证请求即使携带 `X-User-Id` 也仍返回 401，身份头不能替代数据库用户名密码认证。
 
@@ -727,7 +728,7 @@ event=business_rejected status=403 reason=You are not ADMIN
 
 ## API 接口
 
-当前共实现九个接口：
+当前共实现十个接口：
 
 | 方法 | URL | 功能 |
 |---|---|---|
@@ -739,7 +740,20 @@ event=business_rejected status=403 reason=You are not ADMIN
 | `PATCH` | `/tickets/{id}/processing` | 当前维修人员开始处理工单 |
 | `PATCH` | `/tickets/{id}/resolution` | 当前维修人员提交维修结果 |
 | `PATCH` | `/tickets/{id}/closure` | 工单创建人确认问题解决并关闭工单 |
+| `GET` | `/tickets/{id}/logs` | 查询工单状态日志 |
 | `GET` | `/tickets` | 管理员分页查询全部工单 |
+
+### 查询工单状态日志
+
+```http
+GET /tickets/{id}/logs
+```
+
+请求必须通过认证。`ADMIN` 可以查询任意工单；工单创建人可以查询自己创建的工单；当前维修人员可以查询分配给自己的工单。授权在 Service 层按数据库中的角色和工单归属再次校验，不能只依赖 Controller 或客户端传入的身份字段。
+
+工单不存在时返回 `404`；工单存在但没有日志时返回 `200 + []`。查询本身是只读操作，不新增 `ticket` 或 `ticket_log` 记录。日志按 `created_at DESC, id DESC` 排序，创建时间相同的记录按日志 ID 倒序排列。
+
+响应中的每条日志包含 `id`、`fromStatus`、`toStatus`、`operatorId`、`note` 和 `createdAt` 字段。
 
 ### 管理员分页查询工单
 
@@ -1609,17 +1623,17 @@ updatedAt
 mvn test
 ```
 
-当前源码共有 **82 条测试**：
+当前源码共有 **92 条测试**：
 
-- 44 条 `TicketController` MockMvc 测试。
+- 48 条 `TicketController` MockMvc 测试。
 - 4 条数据库认证集成测试。
 - 3 条健康端点与安全边界集成测试。
 - 1 条业务异常处理器的响应与日志单元测试。
-- 24 条 Service 真实数据库集成测试。
+- 30 条 Service 真实数据库集成测试。
 - 5 条事务失败回滚测试。
 - 1 条 Spring 上下文启动测试。
 
-测试证据按执行批次区分：2026-10-25 的完整 Surefire 报告为 81 条全部通过；2026-10-26 的定向回归为 44 条 TicketController 测试与 1 条新增处理器测试，共 45 条，失败、错误和跳过均为 0。当前源码为 82 条，但不能将不同日期的报告混加成“今天完整执行了 82 条”。本次只读取已有报告，没有重复运行测试。
+测试证据按执行批次区分：2026-10-25 的完整 Surefire 报告为 81 条全部通过；2026-10-26 的定向回归为 44 条 TicketController 测试与 1 条新增处理器测试，共 45 条，失败、错误和跳过均为 0。2026-11-08 新增的日志查询定向测试由用户确认通过，覆盖 4 条 Controller MockMvc 测试和 4 条 Service 真实数据库测试；这不等同于当天完整执行 92 条测试。本次只读取已有报告和用户确认，没有重复运行测试。
 
 ### 业务异常处理器单元测试
 
@@ -1633,7 +1647,7 @@ mvn test
 
 ### Controller 测试
 
-当前共有 44 条 Controller MockMvc 测试，主要覆盖以下行为（下列分类不与测试方法逐项对应）：
+当前共有 48 条 Controller MockMvc 测试，主要覆盖以下行为（下列分类不与测试方法逐项对应）：
 
 1. 合法创建请求返回 `201`。
 2. 空标题返回 `400`。
@@ -1677,6 +1691,10 @@ mvn test
 40. 使用自定义 `AppUserPrincipal` 能够越过过滤链，进入 Controller 并返回 `200`。
 41. 详情请求携带与 principal 不同的伪造 `X-User-Id` 时，Service 仍收到 principal id。
 42. 创建请求携带与 principal 不同的伪造 `X-User-Id` 时，Service 仍收到 principal id。
+43. 查询日志未认证时返回 `401`，且不调用 Service。
+44. 查询日志的 Service 抛出越权异常时返回 `403` 和对应 message。
+45. 查询日志对应工单不存在时返回 `404`。
+46. 查询日志成功时返回状态变化、操作人、备注和创建时间字段。
 
 身份迁移后还专门覆盖 `/tickets/mine`、管理员分页和 processing 的伪造 header 场景；未认证请求即使附带伪造身份头也仍返回 401。五类业务接口均验证 Service 收到 principal id，而不是客户端声明的 id。
 
@@ -1710,7 +1728,7 @@ Controller 测试使用模拟的 Service，不连接真实数据库，主要验�
 
 ### Service 集成测试
 
-Service 集成测试连接真实 MySQL，当前共有 24 条测试：
+Service 集成测试连接真实 MySQL，当前共有 30 条测试。除分页、并发和既有状态流测试外，本次新增日志查询覆盖：
 
 1. 创建工单时同时插入工单和创建日志，并正确回填数据库生成的主键。
 2. 管理员分配后，工单状态变为 `ASSIGNED`、`assignee_id` 正确保存，并写入分配日志。
@@ -1736,6 +1754,10 @@ Service 集成测试连接真实 MySQL，当前共有 24 条测试：
 22. `ADMIN`、工单创建人和被分配维修人员查询同一张工单详情均成功。
 23. 其他 `REQUESTER`、其他 `WORKER` 和不存在用户查询详情返回 403；合法用户查询不存在工单返回 null。
 24. `ADMIN`、`WORKER` 和不存在用户创建工单均返回 403，且 ticket 与 ticket_log 的总行数不增加。
+25. `ADMIN`、工单创建人和当前维修人员均可查询同一工单的状态日志，并得到相同的稳定顺序。
+26. 其他 `REQUESTER`、其他 `WORKER` 和不存在用户查询日志返回 403；管理员查询不存在工单返回 null。
+27. 已存在但没有日志的工单返回非 null 的空列表。
+28. 日志创建时间相同时按 `id DESC` 排序，较新的日志先返回。
 
 ### 事务回滚测试
 
@@ -1811,11 +1833,13 @@ Controller 测试、Service 集成测试、事务回滚测试和真实 HTTP 请�
 - [x] 实现管理员列表的状态、创建人和维修人员筛选
 - [x] 保证 COUNT 与分页列表复用同一动态 WHERE 条件
 - [x] 完成筛选的单条件、组合条件、空结果和跨页测试
-- [x] 完成 44 条 Controller MockMvc 测试
+- [x] 实现受权限保护的 `GET /tickets/{id}/logs` 只读查询
+- [x] 完成日志查询的角色/归属、404、空列表和稳定排序测试
+- [x] 完成 48 条 Controller MockMvc 测试
 - [x] 完成 4 条数据库认证集成测试
 - [x] 完成 3 条健康端点与安全边界集成测试
 - [x] 完成业务异常诊断日志及 1 条响应/日志单元测试
-- [x] 完成 24 条 Service 真实数据库集成测试
+- [x] 完成 30 条 Service 真实数据库集成测试
 - [x] 完成 5 条事务失败回滚测试
 - [x] 完成核心工单状态流闭环
 - [x] 修复工单详情接口的越权查询问题
