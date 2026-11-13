@@ -23,6 +23,7 @@ public class TicketController {
         this.ticketService=ticketService;
     }
 
+    //各类角色通过 id查询工单
     @GetMapping("/{id}")
     public ResponseEntity<TicketResponse> selectById(
             @PathVariable Long id,
@@ -39,6 +40,7 @@ public class TicketController {
         }
     }
 
+    //工人查询自己处理的工单
     @GetMapping("/assigned-to-me")
     public ResponseEntity<List<TicketResponse>> selectMyAssignedTickets(@AuthenticationPrincipal AppUserPrincipal principal){
 
@@ -51,6 +53,7 @@ public class TicketController {
         return ResponseEntity.ok(ticketResponse);
     }
 
+    //用户查询自己建立的工单
     @GetMapping("/mine")
     public ResponseEntity<List<TicketResponse>> selectMyTickets(@AuthenticationPrincipal AppUserPrincipal principal){
         List<Ticket> tickets=ticketService.selectByCreatorId(principal.getId());
@@ -62,6 +65,7 @@ public class TicketController {
         return ResponseEntity.ok(ticketResponse);
     }
 
+    //分页查询
     @GetMapping("")
     public PageResult<TicketResponse> selectAllByPage(
             @AuthenticationPrincipal AppUserPrincipal principal,
@@ -81,6 +85,7 @@ public class TicketController {
         return pageResult;
     }
 
+    //各类角色通过 ticketId查询日志
     @GetMapping("/{id}/logs")
     public ResponseEntity<List<TicketLogResponse>> selectTicketLogById(
             @AuthenticationPrincipal AppUserPrincipal principal,
@@ -96,6 +101,7 @@ public class TicketController {
         return ResponseEntity.ok(ticketLogResponses);
     }
 
+    //用户创建工单
     @PostMapping
     public ResponseEntity<TicketResponse> createTicket(
             @AuthenticationPrincipal AppUserPrincipal principal,
@@ -108,6 +114,7 @@ public class TicketController {
                 .body(ticketResponse);
     }
 
+    //管理员分配工单
     @PatchMapping("/{id}/assignment")
     public ResponseEntity<TicketResponse> assignTicket(
             @Valid @RequestBody TicketAssignRequest ticketAssignRequest,
@@ -122,6 +129,7 @@ public class TicketController {
         return ResponseEntity.ok(ticketResponse);
     }
 
+    //工人处理工单
     @PatchMapping("/{id}/processing")
     public ResponseEntity<TicketResponse> processTicket(
             @AuthenticationPrincipal AppUserPrincipal principal,
@@ -135,6 +143,7 @@ public class TicketController {
         return  ResponseEntity.ok(ticketResponse);
     }
 
+    //工人结束处理
     @PatchMapping("/{id}/resolution")
     public ResponseEntity<TicketResponse> resolveTicket(
             @Valid @RequestBody TicketResolveRequest ticketResolveRequest,
@@ -149,6 +158,7 @@ public class TicketController {
         return  ResponseEntity.ok(ticketResponse);
     }
 
+    //用户确认关闭
     @PatchMapping("/{id}/closure")
     public ResponseEntity<TicketResponse> closeTicket(
             @AuthenticationPrincipal AppUserPrincipal principal,
