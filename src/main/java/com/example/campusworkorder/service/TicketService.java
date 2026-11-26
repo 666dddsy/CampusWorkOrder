@@ -9,24 +9,41 @@ import com.example.campusworkorder.exception.BusinessException;
 import com.example.campusworkorder.mapper.AppUserMapper;
 import com.example.campusworkorder.mapper.TicketLogMapper;
 import com.example.campusworkorder.mapper.TicketMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
+import java.time.Duration;
 import java.util.List;
 
 
 @Service
 public class TicketService {
+    private static final String LOG_CACHE_KEY_PREFIX = "ticket:logs:";
     private final TicketMapper ticketMapper;
     private final TicketLogMapper ticketLogMapper;
     private final AppUserMapper appUserMapper;
+    private final StringRedisTemplate redis;
+    private final ObjectMapper objectMapper;
+    private final Duration logCacheTtl;
     public TicketService(
-            TicketMapper ticketMapper,TicketLogMapper ticketLogMapper,AppUserMapper appUserMapper
+            TicketMapper ticketMapper,
+            TicketLogMapper ticketLogMapper,
+            AppUserMapper appUserMapper,
+            StringRedisTemplate redis,
+            ObjectMapper objectMapper,
+            @Value("${app.log-cache.ttl}") Duration logCacheTtl
     ){
         this.ticketLogMapper=ticketLogMapper;
         this.ticketMapper=ticketMapper;
         this.appUserMapper=appUserMapper;
+        this.redis=redis;
+        this.objectMapper=objectMapper;
+        this.logCacheTtl=logCacheTtl;
     }
 
     @Transactional
@@ -43,6 +60,7 @@ public class TicketService {
         if (logAffectedRows != 1) {
             throw new IllegalStateException("failed to create ticket log");
         }
+        redis.delete(LOG_CACHE_KEY_PREFIX + ticket.getId());
         return ticket.getId();
     }
     @Transactional
@@ -71,6 +89,7 @@ public class TicketService {
         int logRows=ticketLogMapper.insert(ticketLog);
         if(logRows!=1)
             throw new IllegalStateException("failed to insert ticket log");
+        redis.delete(LOG_CACHE_KEY_PREFIX + ticketId);
         return ticket;
     }
     @Transactional
@@ -96,6 +115,7 @@ public class TicketService {
         int logRows=ticketLogMapper.insert(ticketLog);
         if(logRows!=1)
             throw new IllegalStateException("failed to insert ticket log");
+        redis.delete(LOG_CACHE_KEY_PREFIX + ticketId);
         return ticket;
     }
     @Transactional
@@ -118,6 +138,7 @@ public class TicketService {
         int logRows=ticketLogMapper.insert(ticketLog);
         if(logRows!=1)
             throw new IllegalStateException("failed to insert ticket log");
+        redis.delete(LOG_CACHE_KEY_PREFIX + ticketId);
         return ticket;
     }
     @Transactional
@@ -140,6 +161,7 @@ public class TicketService {
         int logRows=ticketLogMapper.insert(ticketLog);
         if(logRows!=1)
             throw new IllegalStateException("failed to insert ticket log");
+        redis.delete(LOG_CACHE_KEY_PREFIX + ticketId);
         return ticket;
     }
 
@@ -201,7 +223,13 @@ public class TicketService {
         if(ticket==null)
             return null;
         ensureCanView(ticket,userId,role,"You don't have right to get the ticketLog");
-        return ticketLogMapper.selectByTicketId(ticketId);
+        String cacheKey=LOG_CACHE_KEY_PREFIX+ticketId;
+        String cached=redis.opsForValue().get(cacheKey);
+        if(cached!=null)
+            return objectMapper.readValue(cached, new TypeReference<List<TicketLog>>() {});
+        List<TicketLog> logs=ticketLogMapper.selectByTicketId(ticketId);
+        redis.opsForValue().set(cacheKey,objectMapper.writeValueAsString(logs),logCacheTtl);
+        return logs;
     }
 
     private Ticket toTicket(Long creatorId,TicketCreateRequest ticketCreateRequest){

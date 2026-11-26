@@ -2,6 +2,11 @@ spring:
   application:
     name: CampusWorkOrder
 
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6380
+
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/campus_work_order?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
     username: ${DB_USER}
@@ -22,3 +27,7 @@ management:
     health:
       show-details: never
       show-components: never
+
+app:
+  log-cache:
+    ttl: 60s

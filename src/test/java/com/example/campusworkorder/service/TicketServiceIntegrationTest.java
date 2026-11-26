@@ -16,6 +16,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -38,6 +39,8 @@ public class TicketServiceIntegrationTest {
     private JdbcTemplate jdbcTemplate;
     @Autowired
     private TicketLogMapper ticketLogMapper;
+    @Autowired
+    private StringRedisTemplate redis;
 
     private final List<Long> fixtureUserIds = new ArrayList<>();
     private final List<Long> fixtureTicketIds = new ArrayList<>();
@@ -292,8 +295,56 @@ public class TicketServiceIntegrationTest {
         assertEquals("newer", logs.get(0).getNote());
         assertEquals("older", logs.get(1).getNote());
     }
-
     @Test
+    void selectTicketLogsByTicketId_firstMiss_thenShouldHitCache(){
+        Long adminId=insertUser(UserRole.ADMIN);
+        Long ticketId = insertTicket(adminId, null, TicketStatus.CREATED);
+        insertLog(ticketId, adminId, null, TicketStatus.CREATED, "db-value", LocalDateTime.now());
+        String key = "ticket:logs:" + ticketId;
+        redis.delete(key);
+        //第一次未命中
+        List<TicketLog> first = ticketService.selectLogsByTicketId(ticketId, adminId);
+        assertEquals(1, first.size());
+        assertTrue(redis.hasKey(key));
+        Long ttl = redis.getExpire(key);
+        assertTrue(ttl != null && ttl > 0);
+
+        redis.opsForValue().set(key, "[{\"note\":\"FROM_CACHE\"}]");
+
+        //第二次命中
+        List<TicketLog> second=ticketService.selectLogsByTicketId(ticketId,adminId);
+        assertEquals("FROM_CACHE", second.get(0).getNote());
+        assertNull(second.get(0).getOperatorId());
+
+        redis.delete(key);
+    }
+    @Test
+    void selectTicketLogsByTicketId_shouldNotServeStaleCacheAfterAssign() {
+        Long adminId = insertUser(UserRole.ADMIN);
+        Long workerId = insertUser(UserRole.WORKER);
+        Long ticketId = insertTicket(adminId, null, TicketStatus.CREATED);
+        insertLog(ticketId, adminId, null, TicketStatus.CREATED, "created", LocalDateTime.now());
+
+        String key = "ticket:logs:" + ticketId;
+        redis.delete(key);
+
+        List<TicketLog> before = ticketService.selectLogsByTicketId(ticketId, adminId);
+        assertEquals(1, before.size());
+        assertTrue(redis.hasKey(key));
+
+        TicketAssignRequest request = new TicketAssignRequest();
+        request.setAssigneeId(workerId);
+        ticketService.assignTicket(ticketId, adminId, request);
+
+        assertFalse(redis.hasKey(key));
+
+        List<TicketLog> after = ticketService.selectLogsByTicketId(ticketId, adminId);
+        assertEquals(2, after.size());
+
+        redis.delete(key);
+    }
+
+        @Test
     void createTicket_shouldInsertTicketAndLog(){
         Long creatorId = insertUser(UserRole.REQUESTER);
 
